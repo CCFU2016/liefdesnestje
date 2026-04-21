@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server";
 import { readFile, stat } from "node:fs/promises";
 import { join, normalize } from "node:path";
-import { auth } from "@/lib/auth/config";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
-// Authed static-file serve for recipe images.
-// Any signed-in household member can view recipe images — recipes are already
-// household-scoped, and these URLs have random UUIDs so they're not guessable.
-// Use a light session check (not requireHouseholdMember) to avoid an extra DB
-// round-trip per image request — the list page can request 20+ images in
-// parallel and the household-membership query was creating a connection-pool
-// bottleneck.
+// Public serve for recipe images. Filenames are random UUIDs (see
+// src/lib/uploads.ts), so URLs are unguessable and never exposed outside
+// the authed app. We used to gate this with a session check, but that
+// added one DB round-trip per image — when the recipe list loads 20+
+// pictures in parallel, the connection pool fills up and images start
+// failing with 401s. The UUID-as-capability is a reasonable privacy
+// boundary for a 2-person household app.
 export async function GET(_req: Request, { params }: { params: Promise<{ path: string[] }> }) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  }
-
   const { path } = await params;
   const rel = normalize(path.join("/"));
   if (rel.startsWith("..") || rel.includes("\0")) {
@@ -34,7 +28,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
     headers: {
       "content-type": mime,
       // Filenames are UUIDs → content never changes. Cache aggressively.
-      "cache-control": "private, max-age=604800, immutable",
+      "cache-control": "public, max-age=604800, immutable",
     },
   });
 }

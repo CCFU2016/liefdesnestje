@@ -454,6 +454,9 @@ const PRESET_COLORS = [
   "#2563eb", // blue
 ];
 
+// Same palette, aliased for clarity at the CalendarRow call site.
+const CALENDAR_COLOR_PRESETS = PRESET_COLORS;
+
 function YouEditor({ me, takenColors }: { me: Member; takenColors: string[] }) {
   const [name, setName] = useState(me.displayName);
   const [color, setColor] = useState(me.color);
@@ -747,13 +750,33 @@ function CalendarRow({
     }
   };
 
+  const cycleColor = () => {
+    const current = cal.color;
+    const idx = CALENDAR_COLOR_PRESETS.indexOf(current);
+    const next =
+      idx === -1
+        ? CALENDAR_COLOR_PRESETS[0]
+        : CALENDAR_COLOR_PRESETS[(idx + 1) % CALENDAR_COLOR_PRESETS.length];
+    patch({ color: next });
+  };
+
   return (
     <li className="flex items-center gap-2 py-1.5">
-      <span
-        className="inline-block h-3 w-3 rounded-sm shrink-0"
-        style={{ background: cal.color }}
-        title={cal.color}
-      />
+      {canEdit ? (
+        <button
+          onClick={cycleColor}
+          disabled={busy}
+          className="h-4 w-4 rounded-sm shrink-0 ring-1 ring-zinc-200 dark:ring-zinc-700 cursor-pointer hover:scale-110 transition-transform"
+          style={{ background: cal.color }}
+          title="Click to change color"
+        />
+      ) : (
+        <span
+          className="inline-block h-4 w-4 rounded-sm shrink-0"
+          style={{ background: cal.color }}
+          title={cal.color}
+        />
+      )}
       <div className="flex-1 min-w-0">
         {editing ? (
           <div className="flex gap-1">
