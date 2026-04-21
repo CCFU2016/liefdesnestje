@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EventDialog } from "./event-dialog";
 import { ThreeDayView } from "./three-day-view";
+import { MobileTimeGrid, type MobileEvent } from "./mobile-time-grid";
 
 const locales = { "en-US": enUS };
 // Week starts Monday, not Sunday.
@@ -259,37 +260,76 @@ export function CalendarShell({
         </aside>
 
         <div className="flex-1 min-w-0">
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 overflow-hidden">
-            <Calendar
-              localizer={localizer}
-              formats={formats}
-              events={rbcEvents}
-              startAccessor="start"
-              endAccessor="end"
-              style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}
-              view={view}
-              onView={setView}
-              date={anchor}
-              onNavigate={setAnchor}
-              views={views}
-              messages={(onMobile ? { week: "3 days" } : {}) as Record<string, string>}
-              length={30}
-              scrollToTime={scrollToTime}
-              selectable
-              popup
-              eventPropGetter={eventStyleGetter}
-              onSelectSlot={(slot) => {
-                if (calendars.length === 0) {
-                  toast.message("Connect a calendar first.");
-                  return;
+          {onMobile ? (
+            <div style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}>
+              <MobileTimeGrid
+                events={rbcEvents.map(
+                  (e): MobileEvent => ({
+                    id: e.resource.id,
+                    title: e.resource.title,
+                    start: e.start!,
+                    end: e.end!,
+                    allDay: !!e.allDay,
+                    color:
+                      (e.resource.calendarId
+                        ? calendarsById.get(e.resource.calendarId)?.color
+                        : undefined) ?? "#4f46e5",
+                    resource: e.resource,
+                  })
+                )}
+                anchor={anchor}
+                days={3}
+                scrollToHour={8}
+                onNavigate={setAnchor}
+                onSelectEvent={(me) =>
+                  setDialog({ event: (me.resource ?? me) as EventRow })
                 }
-                setDialog({ slot: { start: slot.start as Date, end: slot.end as Date } });
-              }}
-              onSelectEvent={(ev) =>
-                setDialog({ event: (ev as RBCEvent & { resource: EventRow }).resource })
-              }
-            />
-          </div>
+                onSelectSlot={(day, hour) => {
+                  if (calendars.length === 0) {
+                    toast.message("Connect a calendar first.");
+                    return;
+                  }
+                  const start = new Date(day);
+                  start.setHours(hour, 0, 0, 0);
+                  const end = new Date(start);
+                  end.setHours(hour + 1);
+                  setDialog({ slot: { start, end } });
+                }}
+              />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 overflow-hidden">
+              <Calendar
+                localizer={localizer}
+                formats={formats}
+                events={rbcEvents}
+                startAccessor="start"
+                endAccessor="end"
+                style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}
+                view={view}
+                onView={setView}
+                date={anchor}
+                onNavigate={setAnchor}
+                views={views}
+                messages={{}}
+                length={30}
+                scrollToTime={scrollToTime}
+                selectable
+                popup
+                eventPropGetter={eventStyleGetter}
+                onSelectSlot={(slot) => {
+                  if (calendars.length === 0) {
+                    toast.message("Connect a calendar first.");
+                    return;
+                  }
+                  setDialog({ slot: { start: slot.start as Date, end: slot.end as Date } });
+                }}
+                onSelectEvent={(ev) =>
+                  setDialog({ event: (ev as RBCEvent & { resource: EventRow }).resource })
+                }
+              />
+            </div>
+          )}
           <div className="md:hidden mt-2 flex items-center justify-between text-xs text-zinc-500">
             <button
               onClick={async () => {

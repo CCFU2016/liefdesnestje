@@ -6,6 +6,7 @@ import {
   ExtractionBudgetError,
   extractRecipeFromText,
 } from "@/lib/claude";
+import { downloadAndSaveImage } from "@/lib/uploads";
 
 export const maxDuration = 60;
 
@@ -38,15 +39,22 @@ export async function POST(req: Request) {
       );
     }
 
+    // Persist the best image we can find locally so the recipe card always
+    // has something to show (og:image hosts sometimes go away).
+    const ogImage = extractOgImage(html);
+    const localImageUrl = ogImage ? await downloadAndSaveImage(ogImage) : null;
+
     // 1. Prefer JSON-LD Recipe schema if present — structured, more reliable.
     const jsonLd = parseJsonLdRecipe(html);
     if (jsonLd) {
-      const ogImage = extractOgImage(html);
+      const jsonLdImage = (jsonLd.imageUrl as string | undefined) ?? null;
+      const imageUrl =
+        localImageUrl ?? (jsonLdImage ? await downloadAndSaveImage(jsonLdImage) : null);
       return NextResponse.json({
         recipe: {
           ...jsonLd,
           sourceUrl: url,
-          imageUrl: ogImage ?? jsonLd.imageUrl ?? null,
+          imageUrl,
         },
       });
     }
@@ -55,12 +63,11 @@ export async function POST(req: Request) {
     const text = htmlToText(html);
     const trimmed = text.slice(0, 40000); // cap input
     const recipe = await extractRecipeFromText(trimmed, ctx.userId);
-    const ogImage = extractOgImage(html);
     return NextResponse.json({
       recipe: {
         ...recipe,
         sourceUrl: url,
-        imageUrl: ogImage ?? null,
+        imageUrl: localImageUrl,
       },
     });
   } catch (e) {

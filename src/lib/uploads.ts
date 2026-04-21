@@ -51,3 +51,65 @@ export async function saveUpload(input: {
   await writeFile(full, input.bytes);
   return { path: full, relPath: join(input.subdir, safeName) };
 }
+
+/**
+ * Fetch a remote image and persist it to the uploads volume. Returns the
+ * app-served URL (e.g. "/api/uploads/recipes/<uuid>.jpg") on success, or null
+ * if the URL is unreachable, not an image, or too large.
+ *
+ * Used for TikTok/Instagram thumbnails (CDN URLs are signed and expire) and
+ * recipe-site og:image (host sometimes goes away).
+ */
+export async function downloadAndSaveImage(
+  remoteUrl: string,
+  subdir = "recipes"
+): Promise<string | null> {
+  try {
+    const res = await fetch(remoteUrl, {
+      signal: AbortSignal.timeout(8000),
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
+        Accept: "image/*",
+      },
+    });
+    if (!res.ok) return null;
+
+    const ctypeRaw = res.headers.get("content-type") ?? "";
+    const mime = ctypeRaw.split(";")[0].trim().toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(mime as ImageMime)) return null;
+
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.length;
+        if (total > MAX_IMAGE_BYTES) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+    if (total === 0) return null;
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      bytes.set(c, offset);
+      offset += c.length;
+    }
+
+    const { relPath } = await saveUpload({ subdir, bytes, mime });
+    // relPath is "<subdir>/<filename>" — the serve route is
+    //   /api/uploads/<subdir>/<path...>
+    const inner = relPath.split("/").slice(1).join("/");
+    return `/api/uploads/${subdir}/${inner}`;
+  } catch {
+    return null;
+  }
+}

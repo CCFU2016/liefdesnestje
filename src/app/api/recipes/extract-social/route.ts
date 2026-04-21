@@ -7,6 +7,7 @@ import {
   extractRecipeFromCaption,
 } from "@/lib/claude";
 import { detectSocialUrl } from "@/lib/social";
+import { downloadAndSaveImage } from "@/lib/uploads";
 
 export const maxDuration = 60;
 
@@ -26,31 +27,45 @@ export async function POST(req: Request) {
       );
     }
 
-    // Collect what we can: title, author, caption text.
+    // Collect what we can: title, author, caption text, thumbnail.
     let title: string | null = null;
     let author: string | null = null;
     let caption: string | null = null;
+    let thumbnailUrl: string | null = null;
 
     if (detected.platform === "tiktok") {
       const meta = await fetchTikTokOEmbed(detected.normalizedUrl);
       title = meta?.title ?? null;
       author = meta?.author_name ?? null;
+      thumbnailUrl = meta?.thumbnail_url ?? null;
       // TikTok oEmbed doesn't include the full caption in "title" always — the
       // title IS the caption. Fall back to scraping if empty.
-      caption = meta?.title ?? (await scrapeOgDescription(detected.normalizedUrl));
+      caption = meta?.title ?? null;
+      if (!caption || !thumbnailUrl) {
+        const og = await scrapeOg(detected.normalizedUrl);
+        caption = caption ?? og.ogDescription;
+        thumbnailUrl = thumbnailUrl ?? og.ogImage;
+      }
     } else {
-      // Instagram oEmbed now requires a Meta App token; scrape the og:description
-      // and og:title from the public post page instead.
-      const { ogDescription, ogTitle } = await scrapeOg(detected.normalizedUrl);
-      title = ogTitle;
-      caption = ogDescription;
+      // Instagram oEmbed requires a Meta App token; scrape the og tags from the
+      // public post page instead.
+      const og = await scrapeOg(detected.normalizedUrl);
+      title = og.ogTitle;
+      caption = og.ogDescription;
+      thumbnailUrl = og.ogImage;
     }
+
+    // Download + persist the thumbnail locally — CDN URLs on TikTok/IG are
+    // signed and expire within hours. Store a local copy so the recipe card
+    // keeps its image forever.
+    const localImageUrl = thumbnailUrl ? await downloadAndSaveImage(thumbnailUrl) : null;
 
     if (!caption) {
       return NextResponse.json(
         {
           found: false,
           reason: "Couldn't read the caption — try pasting the recipe text manually.",
+          imageUrl: localImageUrl, // still surface the thumbnail; user might still fill in manually
         },
         { status: 200 }
       );
@@ -63,7 +78,11 @@ export async function POST(req: Request) {
     });
 
     if (!result.found || !result.recipe) {
-      return NextResponse.json({ found: false, reason: result.reason ?? "No recipe in the caption." });
+      return NextResponse.json({
+        found: false,
+        reason: result.reason ?? "No recipe in the caption.",
+        imageUrl: localImageUrl,
+      });
     }
 
     return NextResponse.json({
@@ -71,6 +90,7 @@ export async function POST(req: Request) {
       recipe: {
         ...result.recipe,
         sourceUrl: detected.normalizedUrl,
+        imageUrl: localImageUrl,
       },
     });
   } catch (e) {
@@ -93,40 +113,44 @@ export async function POST(req: Request) {
 
 async function fetchTikTokOEmbed(
   url: string
-): Promise<{ title?: string; author_name?: string } | null> {
+): Promise<{ title?: string; author_name?: string; thumbnail_url?: string } | null> {
   try {
     const res = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
-    return (await res.json()) as { title?: string; author_name?: string };
+    return (await res.json()) as {
+      title?: string;
+      author_name?: string;
+      thumbnail_url?: string;
+    };
   } catch {
     return null;
   }
 }
 
-async function scrapeOg(url: string): Promise<{ ogTitle: string | null; ogDescription: string | null }> {
+async function scrapeOg(
+  url: string
+): Promise<{ ogTitle: string | null; ogDescription: string | null; ogImage: string | null }> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10000),
       headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
         Accept: "text/html",
       },
     });
-    if (!res.ok) return { ogTitle: null, ogDescription: null };
+    if (!res.ok) return { ogTitle: null, ogDescription: null, ogImage: null };
     const html = await res.text();
     return {
       ogTitle: matchMeta(html, "og:title") ?? matchMeta(html, "twitter:title"),
       ogDescription: matchMeta(html, "og:description") ?? matchMeta(html, "twitter:description"),
+      ogImage: matchMeta(html, "og:image") ?? matchMeta(html, "twitter:image"),
     };
   } catch {
-    return { ogTitle: null, ogDescription: null };
+    return { ogTitle: null, ogDescription: null, ogImage: null };
   }
-}
-
-async function scrapeOgDescription(url: string): Promise<string | null> {
-  return (await scrapeOg(url)).ogDescription;
 }
 
 function matchMeta(html: string, property: string): string | null {
