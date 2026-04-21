@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import useSWR from "swr";
 import { toast } from "sonner";
+import { Check, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Member = {
   userId: string;
@@ -18,6 +21,20 @@ type Account = {
   externalAccountId: string;
   expiresAt: Date;
 };
+
+type CalendarVM = {
+  id: string;
+  name: string;
+  color: string;
+  syncEnabled: boolean;
+  provider: "google" | "microsoft";
+  accountEmail: string;
+  ownerUserId: string;
+  ownerIsMe: boolean;
+  ownerDisplayName: string;
+};
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function SettingsClient({
   household,
@@ -36,6 +53,11 @@ export function SettingsClient({
   const me = members.find((m) => m.userId === currentUserId);
   const partner = members.find((m) => m.userId !== currentUserId);
 
+  const { data: calendarsData, mutate: mutateCalendars } = useSWR<{ calendars: CalendarVM[] }>(
+    "/api/calendars",
+    fetcher
+  );
+
   const createInvite = () => {
     start(async () => {
       try {
@@ -49,12 +71,19 @@ export function SettingsClient({
     });
   };
 
-  const connectMicrosoft = () => {
-    window.location.href = "/api/integrations/microsoft/start";
-  };
+  const connectMicrosoft = () => (window.location.href = "/api/integrations/microsoft/start");
+  const connectGoogle = () => (window.location.href = "/api/integrations/google/start");
 
-  const connectGoogle = () => {
-    window.location.href = "/api/integrations/google/start";
+  const syncNow = async () => {
+    try {
+      const res = await fetch("/api/calendar-sync", { method: "POST" });
+      if (!res.ok) throw new Error();
+      const { upserted, removed } = await res.json();
+      toast.success(`Synced — ${upserted} updated, ${removed} removed`);
+      mutateCalendars();
+    } catch {
+      toast.error("Sync failed. Try again.");
+    }
   };
 
   return (
@@ -115,24 +144,31 @@ export function SettingsClient({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Calendar connections</CardTitle>
+          <Button size="sm" variant="ghost" onClick={syncNow} className="gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" /> Sync now
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {myAccounts.length === 0 ? (
             <p className="text-sm text-zinc-500">No calendars connected yet.</p>
           ) : (
-            <ul className="space-y-2">
-              {myAccounts.map((a) => (
-                <li key={a.id} className="flex items-center justify-between text-sm">
-                  <div>
-                    <span className="capitalize font-medium">{a.provider}</span> — {a.externalAccountId}
-                  </div>
-                  <span className="text-xs text-zinc-500">Connected</span>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wider text-zinc-500">Your linked accounts</p>
+              <ul className="space-y-1">
+                {myAccounts.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="capitalize font-medium">{a.provider}</span> — {a.externalAccountId}
+                    </div>
+                    <span className="text-xs text-zinc-500">Connected</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
+
           <div className="flex flex-wrap gap-2 pt-2">
             <Button onClick={connectMicrosoft} variant="secondary">
               Connect Microsoft calendar
@@ -141,9 +177,22 @@ export function SettingsClient({
               Connect Google calendar
             </Button>
           </div>
-          <p className="text-xs text-zinc-500">
-            We sync your calendars both ways. Your partner's calendar (once connected) shows alongside yours.
-          </p>
+
+          {(calendarsData?.calendars?.length ?? 0) > 0 && (
+            <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+              <p className="text-xs uppercase tracking-wider text-zinc-500 mb-2">
+                Calendars shown on the calendar page
+              </p>
+              <ul className="space-y-1">
+                {calendarsData!.calendars.map((c) => (
+                  <CalendarRow key={c.id} cal={c} onChanged={() => mutateCalendars()} />
+                ))}
+              </ul>
+              <p className="text-[11px] text-zinc-500 mt-3">
+                Disabling sync hides a calendar from the grid without disconnecting. Removing it stops syncing and deletes the local copy of its events — nothing is removed from {`{Microsoft/Google}`}.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -160,5 +209,144 @@ export function SettingsClient({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function CalendarRow({
+  cal,
+  onChanged,
+}: {
+  cal: CalendarVM;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(cal.name);
+  const [busy, setBusy] = useState(false);
+  const canEdit = cal.ownerIsMe;
+
+  const patch = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/calendars/${cal.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Update failed");
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveName = async () => {
+    if (!name.trim() || name === cal.name) {
+      setEditing(false);
+      setName(cal.name);
+      return;
+    }
+    await patch({ name: name.trim() });
+    setEditing(false);
+  };
+
+  const toggleSync = () => patch({ syncEnabled: !cal.syncEnabled });
+
+  const remove = async () => {
+    if (
+      !confirm(
+        `Remove "${cal.name}" from Liefdesnestje? Its events disappear here. Nothing changes in ${cal.provider === "microsoft" ? "Outlook" : "Google Calendar"}.`
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/calendars/${cal.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Removed");
+      onChanged();
+    } catch {
+      toast.error("Couldn't remove. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="flex items-center gap-2 py-1.5">
+      <span
+        className="inline-block h-3 w-3 rounded-sm shrink-0"
+        style={{ background: cal.color }}
+        title={cal.color}
+      />
+      <div className="flex-1 min-w-0">
+        {editing ? (
+          <div className="flex gap-1">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-7 text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveName();
+                if (e.key === "Escape") {
+                  setEditing(false);
+                  setName(cal.name);
+                }
+              }}
+            />
+            <Button size="icon" variant="ghost" onClick={saveName} disabled={busy} className="h-7 w-7">
+              <Check className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setEditing(false);
+                setName(cal.name);
+              }}
+              className="h-7 w-7"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-sm truncate">{cal.name}</span>
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+              {cal.provider}
+              {!cal.ownerIsMe && ` · ${cal.ownerDisplayName}`}
+            </span>
+          </div>
+        )}
+      </div>
+      {canEdit && !editing && (
+        <>
+          <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cal.syncEnabled}
+              onChange={toggleSync}
+              disabled={busy}
+            />
+            Sync
+          </label>
+          <Button size="icon" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7" title="Rename">
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={remove}
+            disabled={busy}
+            className="h-7 w-7 text-zinc-500 hover:text-red-500"
+            title="Remove"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
+    </li>
   );
 }

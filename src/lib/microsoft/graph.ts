@@ -113,16 +113,27 @@ export async function deltaEvents(
   calendarExternalId: string,
   deltaLink: string | null
 ): Promise<{ value: MsEvent[]; nextDeltaLink: string | null }> {
-  const url = deltaLink
-    ? deltaLink
-    : `/me/calendars/${calendarExternalId}/events/delta?$select=id,subject,bodyPreview,body,start,end,isAllDay,isCancelled,location,type,seriesMasterId`;
+  let url: string;
+  if (deltaLink) {
+    // Subsequent round — reuse the opaque deltaLink as-is (it encodes the window).
+    url = deltaLink;
+  } else {
+    // Initial round — Graph requires an explicit time window and a Prefer
+    // header. Use a sliding 90d-back / 365d-forward window.
+    const startDateTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const endDateTime = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+    const qs = new URLSearchParams({ startDateTime, endDateTime });
+    url = `/me/calendars/${calendarExternalId}/calendarView/delta?${qs}`;
+  }
 
   type Page = { value: MsEvent[]; "@odata.nextLink"?: string; "@odata.deltaLink"?: string };
   const all: MsEvent[] = [];
   let next: string | null = url;
   let delta: string | null = null;
   while (next) {
-    const page: Page = await graphFetch<Page>(accountId, next);
+    const page: Page = await graphFetch<Page>(accountId, next, {
+      headers: { Prefer: 'odata.maxpagesize=200, outlook.body-content-type="text"' },
+    });
     all.push(...page.value);
     if (page["@odata.nextLink"]) next = page["@odata.nextLink"];
     else {
