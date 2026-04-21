@@ -21,6 +21,16 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Trust the X-Forwarded-* headers set by Railway's proxy. Without this,
+  // Auth.js constructs cookies against the internal service host rather
+  // than the public *.up.railway.app host — the PKCE cookie gets written
+  // under one host and read under another, and iOS Safari (stricter than
+  // Chrome/Firefox about cross-host cookies in the OAuth callback) fails
+  // with 'pkceCodeVerifier value could not be parsed'.
+  trustHost: true,
+  // Force secure cookies in every prod deploy so iOS Safari accepts them
+  // during the Google redirect round-trip.
+  useSecureCookies: process.env.NODE_ENV === "production",
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
@@ -63,6 +73,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   pages: {
     signIn: "/signin",
+    // When the OAuth callback throws (bad PKCE cookie, state mismatch, etc.)
+    // route back to /signin rather than the default error page — iOS users
+    // just want a retry button.
+    error: "/signin",
   },
   logger: {
     error(error: Error) {
