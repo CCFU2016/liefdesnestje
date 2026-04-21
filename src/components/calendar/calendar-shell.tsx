@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Calendar, dateFnsLocalizer, type View, type Event as RBCEvent } from "react-big-calendar";
 import { format, parse, startOfWeek, getDay } from "date-fns";
@@ -86,10 +86,36 @@ export function CalendarShell({
   calendars: CalendarVM[];
 }) {
   const [onMobile, setOnMobile] = useState(false);
-  useEffect(() => setOnMobile(isMobile()), []);
-  const [view, setView] = useState<View>(
-    isMobile() ? ("threeDay" as unknown as View) : ("week" as View)
+  useEffect(() => {
+    const check = () => setOnMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  // view state uses names valid in BOTH configs ('week' exists on mobile too,
+  // just points at ThreeDayView there — avoids SSR/hydration mismatch).
+  const [view, setView] = useState<View>("week");
+  useEffect(() => {
+    // Month view isn't available on mobile — bounce to Week (= 3-day) if user
+    // shrinks the window while on Month.
+    if (onMobile && view === "month") setView("week");
+  }, [onMobile, view]);
+
+  const views = useMemo(
+    () =>
+      onMobile
+        ? ({ day: true, week: ThreeDayView, agenda: true } as unknown as View[])
+        : (["month", "week", "day", "agenda"] as View[]),
+    [onMobile]
   );
+
+  // Default scroll position: 8 AM
+  const scrollToTime = useRef(() => {
+    const d = new Date();
+    d.setHours(8, 0, 0, 0);
+    return d;
+  }).current();
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<{
@@ -121,13 +147,19 @@ export function CalendarShell({
     const rows = data?.events ?? [];
     return rows
       .filter((e) => (e.calendarId ? !hiddenCalendars.has(e.calendarId) : true))
-      .map((e) => ({
-        title: e.title,
-        start: new Date(e.startsAt),
-        end: new Date(e.endsAt),
-        allDay: e.allDay,
-        resource: e,
-      }));
+      .map((e) => {
+        let start = new Date(e.startsAt);
+        let end = new Date(e.endsAt);
+        if (e.allDay) {
+          // All-day events are stored as UTC midnight. In non-UTC timezones
+          // (e.g. CEST = UTC+2) that displays as "2am local". Normalize to
+          // local midnight of the same calendar date so rbc renders them in
+          // the all-day strip correctly.
+          start = new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+          end = new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+        }
+        return { title: e.title, start, end, allDay: e.allDay, resource: e };
+      });
   }, [data, hiddenCalendars]);
 
   const eventStyleGetter = (event: RBCEvent) => {
@@ -239,13 +271,10 @@ export function CalendarShell({
               onView={setView}
               date={anchor}
               onNavigate={setAnchor}
-              views={
-                onMobile
-                  ? ({ day: true, threeDay: ThreeDayView, agenda: true } as unknown as View[])
-                  : (["month", "week", "day", "agenda"] as View[])
-              }
-              messages={{ threeDay: "3 days" } as Record<string, string>}
+              views={views}
+              messages={(onMobile ? { week: "3 days" } : {}) as Record<string, string>}
               length={30}
+              scrollToTime={scrollToTime}
               selectable
               popup
               eventPropGetter={eventStyleGetter}

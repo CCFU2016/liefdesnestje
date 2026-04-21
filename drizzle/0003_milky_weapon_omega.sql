@@ -1,0 +1,1 @@
+ALTER TABLE "calendars" ADD COLUMN "show_on_today" boolean DEFAULT true NOT NULL;

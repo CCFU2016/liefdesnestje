@@ -151,6 +151,7 @@ export const calendars = pgTable(
     name: text("name").notNull(),
     color: varchar("color", { length: 7 }),
     syncEnabled: boolean("sync_enabled").notNull().default(true),
+    showOnToday: boolean("show_on_today").notNull().default(true),
     deltaLink: text("delta_link"), // Microsoft Graph delta token
     syncToken: text("sync_token"), // Google Calendar sync token
     subscriptionId: text("subscription_id"), // webhook subscription / channel id

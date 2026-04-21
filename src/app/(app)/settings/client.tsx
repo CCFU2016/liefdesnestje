@@ -27,6 +27,7 @@ type CalendarVM = {
   name: string;
   color: string;
   syncEnabled: boolean;
+  showOnToday: boolean;
   provider: "google" | "microsoft" | "ics";
   accountEmail: string;
   ownerUserId: string | null;
@@ -500,6 +501,7 @@ function CalendarRow({
   };
 
   const toggleSync = () => patch({ syncEnabled: !cal.syncEnabled });
+  const toggleToday = () => patch({ showOnToday: !cal.showOnToday });
 
   const remove = async () => {
     const source =
@@ -585,7 +587,10 @@ function CalendarRow({
       </div>
       {canEdit && !editing && (
         <>
-          <label className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer">
+          <label
+            className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer"
+            title="Sync this calendar and show on the main Calendar page"
+          >
             <input
               type="checkbox"
               checked={cal.syncEnabled}
@@ -593,6 +598,18 @@ function CalendarRow({
               disabled={busy}
             />
             Sync
+          </label>
+          <label
+            className="flex items-center gap-1 text-xs text-zinc-500 cursor-pointer"
+            title="Show events from this calendar on the Today overview"
+          >
+            <input
+              type="checkbox"
+              checked={cal.showOnToday}
+              onChange={toggleToday}
+              disabled={busy || !cal.syncEnabled}
+            />
+            Today
           </label>
           <Button size="icon" variant="ghost" onClick={() => setEditing(true)} className="h-7 w-7" title="Rename">
             <Pencil className="h-3.5 w-3.5" />

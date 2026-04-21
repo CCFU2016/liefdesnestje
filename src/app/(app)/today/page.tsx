@@ -26,7 +26,10 @@ export default async function TodayPage() {
           gte(events.endsAt, dayStart),
           lte(events.startsAt, dayEnd),
           or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId)),
-          or(isNull(events.calendarId), eq(calendars.syncEnabled, true))
+          or(
+            isNull(events.calendarId),
+            and(eq(calendars.syncEnabled, true), eq(calendars.showOnToday, true))
+          )
         )
       )
       .orderBy(events.startsAt),
@@ -39,16 +42,28 @@ export default async function TodayPage() {
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
 
-  // Attach a display color to each event: calendar color if synced, else the
-  // author's member color.
-  const todayEvents = todayEventsRaw.map((r) => ({
-    ...r.event,
-    color:
-      r.calendar?.color ??
-      memberByUserId.get(r.account?.userId ?? r.event.authorId)?.color ??
-      "#71717a",
-    ownerName: memberByUserId.get(r.account?.userId ?? r.event.authorId)?.displayName,
-  }));
+  // Attach a display color + normalize all-day event dates (stored as UTC
+  // midnight, need to render as "today" not "2am local").
+  const todayEvents = todayEventsRaw.map((r) => {
+    let startsAt = r.event.startsAt;
+    let endsAt = r.event.endsAt;
+    if (r.event.allDay) {
+      const s = new Date(startsAt);
+      const e = new Date(endsAt);
+      startsAt = new Date(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+      endsAt = new Date(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate());
+    }
+    return {
+      ...r.event,
+      startsAt,
+      endsAt,
+      color:
+        r.calendar?.color ??
+        memberByUserId.get(r.account?.userId ?? r.event.authorId)?.color ??
+        "#71717a",
+      ownerName: memberByUserId.get(r.account?.userId ?? r.event.authorId)?.displayName,
+    };
+  });
 
   const listIds = lists.map((l) => l.id);
   const topTodos = listIds.length

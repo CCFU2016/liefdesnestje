@@ -12,6 +12,7 @@ const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   syncEnabled: z.boolean().optional(),
+  showOnToday: z.boolean().optional(),
 });
 
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
@@ -50,6 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(body.data.name !== undefined ? { name: body.data.name } : {}),
         ...(body.data.color !== undefined ? { color: body.data.color } : {}),
         ...(body.data.syncEnabled !== undefined ? { syncEnabled: body.data.syncEnabled } : {}),
+        ...(body.data.showOnToday !== undefined ? { showOnToday: body.data.showOnToday } : {}),
         updatedAt: new Date(),
       })
       .where(eq(calendars.id, id))
