@@ -218,7 +218,7 @@ export async function unsubscribeCalendar(
 
 export async function accountForCalendar(localCalendarId: string) {
   const cal = (await db.select().from(calendars).where(eq(calendars.id, localCalendarId)).limit(1))[0];
-  if (!cal) return null;
+  if (!cal || !cal.accountId) return null;
   const account = (
     await db
       .select()

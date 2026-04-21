@@ -18,10 +18,11 @@ const localizer = dateFnsLocalizer({ format, parse, startOfWeek: startOfWeekMond
 
 type CalendarVM = {
   id: string;
-  accountId: string;
+  accountId: string | null;
   name: string;
   color: string;
   syncEnabled: boolean;
+  writable: boolean;
 };
 
 type AccountVM = {
@@ -48,6 +49,13 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function isMobile() {
   return typeof window !== "undefined" && window.innerWidth < 768;
+}
+
+// Best-effort: infer "current user id" from the list of accounts passed in.
+// Since /api/calendars returns writable=true only for the caller's accounts,
+// this is just used as a secondary guard and no longer strictly necessary.
+function currentUserIdFromAcc(accounts: AccountVM[]): string | undefined {
+  return accounts[0]?.userId;
 }
 
 // 24-hour formats for react-big-calendar (defaults are 12h AM/PM).
@@ -294,8 +302,10 @@ export function CalendarShell({
             setDialog(null);
             mutate();
           }}
-          calendars={calendars.filter((c) =>
-            accounts.some((a) => a.id === c.accountId && a.userId) // only own-writable calendars
+          calendars={calendars.filter(
+            (c) =>
+              c.writable &&
+              accounts.some((a) => a.id === c.accountId && a.userId === currentUserIdFromAcc(accounts))
           )}
           initialEvent={dialog.event ?? null}
           initialSlot={dialog.slot ?? null}

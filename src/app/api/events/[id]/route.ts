@@ -42,7 +42,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // If it has an external source, write-through to that provider first.
     if (ev.calendarId && ev.externalId) {
       const cal = (await db.select().from(calendars).where(eq(calendars.id, ev.calendarId)).limit(1))[0];
-      if (cal) {
+      if (cal && cal.sourceType === "ics") {
+        return NextResponse.json(
+          { error: "Can't edit — this calendar is read-only (ICS subscription)." },
+          { status: 400 }
+        );
+      }
+      if (cal && cal.accountId) {
         const account = (
           await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId)).limit(1)
         )[0];
@@ -159,7 +165,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     if (ev.calendarId && ev.externalId) {
       const cal = (await db.select().from(calendars).where(eq(calendars.id, ev.calendarId)).limit(1))[0];
-      if (cal) {
+      if (cal && cal.sourceType === "ics") {
+        return NextResponse.json(
+          { error: "Can't delete — this calendar is read-only (ICS subscription)." },
+          { status: 400 }
+        );
+      }
+      if (cal && cal.accountId) {
         const account = (
           await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId)).limit(1)
         )[0];

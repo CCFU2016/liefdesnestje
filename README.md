@@ -92,7 +92,9 @@ On Railway: add a **Cron** service → schedule `0 */6 * * *` → command `pnpm 
 3. Set the other env vars (see table above).
 4. Railway auto-detects Next.js. The build command `pnpm build` and start `pnpm start` are picked up from `package.json`.
 5. Add a **Volume** mounted at `/data` for future file uploads (trip documents).
-6. Add a **Cron service** pointing at the same repo with command `pnpm cron:renew-subscriptions` on `0 */6 * * *`.
+6. Add two **Cron services** pointing at the same repo:
+   - `pnpm cron:renew-subscriptions` on `0 */6 * * *` — renews Microsoft/Google webhook subscriptions.
+   - `pnpm cron:refresh-ics` on `0 */6 * * *` — refreshes every ICS subscription (4 times/day; deleted events are tombstoned).
 7. Update your Azure app's redirect URIs + `NEXT_PUBLIC_APP_URL` to the Railway subdomain.
 8. Run the first migration with `railway run pnpm db:migrate` from your local machine.
 
@@ -139,7 +141,8 @@ pnpm e2e             # Playwright (requires test DB + seeded users; see tests/e2
 | `pnpm db:studio` | Drizzle Studio |
 | `pnpm test` | Vitest once |
 | `pnpm e2e` | Playwright |
-| `pnpm cron:renew-subscriptions` | Refresh Graph webhook subscriptions |
+| `pnpm cron:renew-subscriptions` | Refresh Graph/Google webhook subscriptions |
+| `pnpm cron:refresh-ics` | Re-pull all ICS subscriptions (runs every 6h in prod) |
 
 ## What's deferred to later sprints
 

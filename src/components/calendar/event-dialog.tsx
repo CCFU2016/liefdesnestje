@@ -12,7 +12,7 @@ type CalendarVM = {
   id: string;
   name: string;
   color: string;
-  accountId: string;
+  accountId: string | null;
 };
 
 type EventRow = {

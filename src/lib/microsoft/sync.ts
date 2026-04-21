@@ -166,7 +166,7 @@ export async function subscribeCalendar(
 /** Returns the account row owning a local calendar (for downstream API calls). */
 export async function accountForCalendar(localCalendarId: string) {
   const cal = (await db.select().from(calendars).where(eq(calendars.id, localCalendarId)).limit(1))[0];
-  if (!cal) return null;
+  if (!cal || !cal.accountId) return null;
   const account = (
     await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId)).limit(1)
   )[0];

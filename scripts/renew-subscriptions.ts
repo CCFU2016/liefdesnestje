@@ -40,7 +40,7 @@ const due = await db
 console.log(`Renewing ${due.length} subscription(s)`);
 
 for (const { cal, account } of due) {
-  if (!cal.subscriptionId) continue;
+  if (!cal.subscriptionId || !cal.accountId) continue;
   try {
     if (account.provider === "microsoft") {
       const renewed = await msRenew(cal.accountId, cal.subscriptionId);

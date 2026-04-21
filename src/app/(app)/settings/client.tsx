@@ -27,11 +27,15 @@ type CalendarVM = {
   name: string;
   color: string;
   syncEnabled: boolean;
-  provider: "google" | "microsoft";
+  provider: "google" | "microsoft" | "ics";
   accountEmail: string;
-  ownerUserId: string;
+  ownerUserId: string | null;
   ownerIsMe: boolean;
   ownerDisplayName: string;
+  lastSyncedAt: string | Date | null;
+  lastError: string | null;
+  icsUrl: string | null;
+  writable: boolean;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -180,6 +184,8 @@ export function SettingsClient({
               Connect Google calendar
             </Button>
           </div>
+
+          <IcsAdder onAdded={mutateCalendars} />
 
           {(calendarsData?.calendars?.length ?? 0) > 0 && (
             <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
@@ -335,6 +341,79 @@ function YouEditor({ me, takenColors }: { me: Member; takenColors: string[] }) {
   );
 }
 
+function IcsAdder({ onAdded }: { onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !url.trim()) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/ics-calendars", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), url: url.trim() }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Couldn't add");
+      toast.success("Added — fetching events…");
+      setName("");
+      setUrl("");
+      setOpen(false);
+      onAdded();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="pt-2">
+        <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+          + Add calendar via ICS link
+        </Button>
+        <p className="text-[11px] text-zinc-500 mt-1">
+          Read-only. Think holiday calendars, sports schedules, or the &quot;share URL&quot; a co-worker sent you.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-md border border-zinc-200 dark:border-zinc-800 p-3 space-y-2">
+      <p className="text-xs uppercase tracking-wider text-zinc-500">New ICS subscription</p>
+      <div className="space-y-1">
+        <Input
+          placeholder="Name (e.g. Dutch holidays)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        <Input
+          placeholder="https://…/calendar.ics  (webcal:// also works)"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy}>
+          {busy ? "Fetching…" : "Add"}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)} disabled={busy}>
+          Cancel
+        </Button>
+      </div>
+      <p className="text-[11px] text-zinc-500">
+        Refreshes automatically every 6 hours; deleted events get removed on the next refresh.
+      </p>
+    </form>
+  );
+}
+
 function AccountRow({
   account,
   onChanged,
@@ -423,9 +502,15 @@ function CalendarRow({
   const toggleSync = () => patch({ syncEnabled: !cal.syncEnabled });
 
   const remove = async () => {
+    const source =
+      cal.provider === "microsoft"
+        ? "Outlook"
+        : cal.provider === "google"
+          ? "Google Calendar"
+          : "the source URL";
     if (
       !confirm(
-        `Remove "${cal.name}" from Liefdesnestje? Its events disappear here. Nothing changes in ${cal.provider === "microsoft" ? "Outlook" : "Google Calendar"}.`
+        `Remove "${cal.name}" from Liefdesnestje? Its events disappear here. Nothing changes in ${source}.`
       )
     )
       return;
@@ -481,12 +566,20 @@ function CalendarRow({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-sm truncate">{cal.name}</span>
-            <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
-              {cal.provider}
-              {!cal.ownerIsMe && ` · ${cal.ownerDisplayName}`}
-            </span>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="text-sm truncate">{cal.name}</span>
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500 shrink-0">
+                {cal.provider}
+                {cal.provider !== "ics" && !cal.ownerIsMe && ` · ${cal.ownerDisplayName}`}
+                {cal.provider === "ics" && " · subscription"}
+              </span>
+            </div>
+            {cal.lastError && (
+              <div className="text-[11px] text-red-500 truncate" title={cal.lastError}>
+                ⚠ {cal.lastError}
+              </div>
+            )}
           </div>
         )}
       </div>

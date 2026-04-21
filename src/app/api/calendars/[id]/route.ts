@@ -17,11 +17,17 @@ const patchSchema = z.object({
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
   const cal = (await db.select().from(calendars).where(eq(calendars.id, id)).limit(1))[0];
   if (!cal) return null;
+
+  if (cal.sourceType === "ics") {
+    // ICS subscriptions are household-scoped; any household member can manage.
+    if (cal.householdId !== ctx.householdId) return null;
+    return { cal, account: null as null };
+  }
+
   const account = (
-    await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId)).limit(1)
+    await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId!)).limit(1)
   )[0];
   if (!account) return null;
-  // Only the owning user can modify their calendars; partners can see them but not change labels.
   if (account.userId !== ctx.userId) return null;
   return { cal, account };
 }
@@ -49,12 +55,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       .where(eq(calendars.id, id))
       .returning();
 
-    // If sync was just turned on, kick off an initial pull (don't await fully — best-effort).
+    // If sync was just turned on, kick off an initial pull (best-effort).
     if (!wasEnabled && body.data.syncEnabled === true) {
       const run = async () => {
         try {
-          const fn = loaded.account.provider === "microsoft" ? msSync : gcalSync;
-          await fn(loaded.account.id, id, ctx.householdId, ctx.userId);
+          if (loaded.account) {
+            const fn = loaded.account.provider === "microsoft" ? msSync : gcalSync;
+            await fn(loaded.account.id, id, ctx.householdId, ctx.userId);
+          } else if (loaded.cal.sourceType === "ics") {
+            const { refreshIcsCalendar } = await import("@/lib/ics/sync");
+            await refreshIcsCalendar(id);
+          }
         } catch (e) {
           console.error("post-enable sync failed", e);
         }
@@ -84,9 +95,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const loaded = await loadForCaller(id, ctx);
     if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Best-effort unsubscribe at the provider.
+    // Best-effort unsubscribe at the provider (ICS has no subscription).
     try {
-      if (loaded.cal.subscriptionId) {
+      if (loaded.cal.subscriptionId && loaded.account) {
         if (loaded.account.provider === "microsoft") {
           await msDeleteSubscription(loaded.account.id, loaded.cal.subscriptionId);
         } else if (loaded.account.provider === "google") {

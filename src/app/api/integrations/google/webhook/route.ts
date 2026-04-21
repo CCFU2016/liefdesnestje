@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       const cal = (
         await db.select().from(calendars).where(eq(calendars.subscriptionId, channelId)).limit(1)
       )[0];
-      if (!cal) return;
+      if (!cal || !cal.accountId) return;
       const account = (
         await db
           .select()

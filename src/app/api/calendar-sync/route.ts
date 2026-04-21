@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 import { syncCalendarEvents as msSyncCalendarEvents } from "@/lib/microsoft/sync";
 import { syncCalendarEvents as gcalSyncCalendarEvents } from "@/lib/google/sync";
+import { refreshStaleIcs } from "@/lib/ics/sync";
 
 /**
  * Pulls a delta sync for all of the caller's enabled calendars. Safe to
@@ -36,6 +37,16 @@ export async function POST() {
         }
       }
     }
+
+    // Also refresh any stale ICS subscriptions (> 1h old — user-triggered sync
+    // is more aggressive than the cron).
+    try {
+      const ics = await refreshStaleIcs(60 * 60 * 1000);
+      totalUpserted += ics.refreshed; // treat each refreshed feed as 1 unit
+    } catch (e) {
+      console.error("ics refresh batch failed", e);
+    }
+
     return NextResponse.json({ upserted: totalUpserted, removed: totalRemoved });
   } catch (e) {
     if (e instanceof UnauthorizedError) {

@@ -15,6 +15,13 @@
       "when": 1776768343378,
       "tag": "0001_shocking_northstar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776783712678,
+      "tag": "0002_neat_robbie_robertson",
+      "breakpoints": true
     }
   ]
 }

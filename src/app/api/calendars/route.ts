@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 
 export async function GET() {
   try {
     const ctx = await requireHouseholdMember();
 
-    // Include calendars for all accounts owned by any household member.
     const members = await db
       .select({ userId: householdMembers.userId, displayName: householdMembers.displayName, color: householdMembers.color })
       .from(householdMembers)
@@ -18,15 +17,43 @@ export async function GET() {
     const accounts = userIds.length
       ? await db.select().from(externalCalendarAccounts).where(inArray(externalCalendarAccounts.userId, userIds))
       : [];
-    const cals = accounts.length
-      ? await db.select().from(calendars).where(inArray(calendars.accountId, accounts.map((a) => a.id)))
-      : [];
+
+    // Calendars visible to this household are either:
+    //   - OAuth calendars: accountId ∈ household members' accounts, OR
+    //   - ICS subscriptions: directly household-scoped via calendars.householdId
+    const accountIds = accounts.map((a) => a.id);
+    const cals = await db
+      .select()
+      .from(calendars)
+      .where(
+        or(
+          accountIds.length ? inArray(calendars.accountId, accountIds) : undefined,
+          eq(calendars.householdId, ctx.householdId)
+        )!
+      );
 
     const memberByUserId = new Map(members.map((m) => [m.userId, m]));
     const accountById = new Map(accounts.map((a) => [a.id, a]));
 
     const payload = cals.map((c) => {
-      const account = accountById.get(c.accountId)!;
+      if (c.sourceType === "ics") {
+        return {
+          id: c.id,
+          name: c.name,
+          color: c.color ?? "#7c3aed",
+          syncEnabled: c.syncEnabled,
+          provider: "ics" as const,
+          accountEmail: c.icsUrl ?? "",
+          ownerUserId: null,
+          ownerIsMe: true, // ICS is household-wide, any member can manage
+          ownerDisplayName: "Subscription",
+          lastSyncedAt: c.lastSyncedAt,
+          lastError: c.lastError,
+          icsUrl: c.icsUrl,
+          writable: false,
+        };
+      }
+      const account = accountById.get(c.accountId!)!;
       const member = memberByUserId.get(account.userId);
       return {
         id: c.id,
@@ -38,6 +65,10 @@ export async function GET() {
         ownerUserId: account.userId,
         ownerIsMe: account.userId === ctx.userId,
         ownerDisplayName: member?.displayName ?? "Partner",
+        lastSyncedAt: null,
+        lastError: null,
+        icsUrl: null,
+        writable: account.userId === ctx.userId,
       };
     });
 
@@ -50,3 +81,6 @@ export async function GET() {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
+// silence unused-import linting while keeping the symbol available for IDE jump-to
+void and;

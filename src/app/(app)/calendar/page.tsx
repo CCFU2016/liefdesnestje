@@ -1,13 +1,12 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { CalendarShell } from "@/components/calendar/calendar-shell";
 
 export default async function CalendarPage() {
   const ctx = await requireHouseholdMember();
 
-  // Both members' linked calendars (user-scoped, but surface them all to the household)
   const members = await db
     .select({ userId: householdMembers.userId, displayName: householdMembers.displayName, color: householdMembers.color })
     .from(householdMembers)
@@ -17,18 +16,21 @@ export default async function CalendarPage() {
   const accounts = userIds.length
     ? await db.select().from(externalCalendarAccounts).where(inArray(externalCalendarAccounts.userId, userIds))
     : [];
+  const accountIds = accounts.map((a) => a.id);
 
-  const linkedCalendars = accounts.length
-    ? await db
-        .select()
-        .from(calendars)
-        .where(
-          and(
-            inArray(calendars.accountId, accounts.map((a) => a.id)),
-            eq(calendars.syncEnabled, true)
-          )
-        )
-    : [];
+  // Either OAuth calendars owned by members, or ICS subscriptions at household scope.
+  const linkedCalendars = await db
+    .select()
+    .from(calendars)
+    .where(
+      and(
+        eq(calendars.syncEnabled, true),
+        or(
+          accountIds.length ? inArray(calendars.accountId, accountIds) : undefined,
+          eq(calendars.householdId, ctx.householdId)
+        )!
+      )
+    );
 
   return (
     <CalendarShell
@@ -45,6 +47,7 @@ export default async function CalendarPage() {
         name: c.name,
         color: c.color ?? "#4f46e5",
         syncEnabled: c.syncEnabled,
+        writable: c.sourceType === "oauth",
       }))}
     />
   );

@@ -68,6 +68,12 @@ export async function POST(req: Request) {
       await db.select().from(calendars).where(eq(calendars.id, body.data.calendarId)).limit(1)
     )[0];
     if (!cal) return NextResponse.json({ error: "Calendar not found" }, { status: 404 });
+    if (cal.sourceType === "ics" || !cal.accountId) {
+      return NextResponse.json(
+        { error: "Can't add events to this calendar — it's a read-only subscription." },
+        { status: 400 }
+      );
+    }
 
     const account = (
       await db

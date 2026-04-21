@@ -142,9 +142,11 @@ export const calendars = pgTable(
   "calendars",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    accountId: uuid("account_id")
-      .notNull()
-      .references(() => externalCalendarAccounts.id, { onDelete: "cascade" }),
+    // OAuth calendars: accountId set, householdId null (derived via account).
+    // ICS subscriptions:   accountId null, householdId set, icsUrl set.
+    accountId: uuid("account_id").references(() => externalCalendarAccounts.id, { onDelete: "cascade" }),
+    householdId: uuid("household_id").references(() => households.id, { onDelete: "cascade" }),
+    sourceType: varchar("source_type", { length: 16 }).notNull().default("oauth"), // 'oauth' | 'ics'
     externalId: text("external_id").notNull(),
     name: text("name").notNull(),
     color: varchar("color", { length: 7 }),
@@ -154,6 +156,10 @@ export const calendars = pgTable(
     subscriptionId: text("subscription_id"), // webhook subscription / channel id
     subscriptionResourceId: text("subscription_resource_id"), // Google: needed to stop a channel
     subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
+    icsUrl: text("ics_url"),
+    icsEtag: text("ics_etag"),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
