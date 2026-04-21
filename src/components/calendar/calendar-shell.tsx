@@ -50,6 +50,23 @@ function isMobile() {
   return typeof window !== "undefined" && window.innerWidth < 768;
 }
 
+// 24-hour formats for react-big-calendar (defaults are 12h AM/PM).
+const formats = {
+  timeGutterFormat: "HH:mm",
+  eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm")}–${format(end, "HH:mm")}`,
+  selectRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm")}–${format(end, "HH:mm")}`,
+  agendaTimeFormat: "HH:mm",
+  agendaTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "HH:mm")}–${format(end, "HH:mm")}`,
+  agendaHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "d MMM")} – ${format(end, "d MMM")}`,
+  dayHeaderFormat: "EEEE, d MMM",
+  dayRangeHeaderFormat: ({ start, end }: { start: Date; end: Date }) =>
+    `${format(start, "d MMM")} – ${format(end, "d MMM")}`,
+};
+
 export function CalendarShell({
   members,
   accounts,
@@ -200,6 +217,7 @@ export function CalendarShell({
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 overflow-hidden">
             <Calendar
               localizer={localizer}
+              formats={formats}
               events={rbcEvents}
               startAccessor="start"
               endAccessor="end"
