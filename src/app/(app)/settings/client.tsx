@@ -158,12 +158,15 @@ export function SettingsClient({
               <p className="text-xs uppercase tracking-wider text-zinc-500">Your linked accounts</p>
               <ul className="space-y-1">
                 {myAccounts.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <span className="capitalize font-medium">{a.provider}</span> — {a.externalAccountId}
-                    </div>
-                    <span className="text-xs text-zinc-500">Connected</span>
-                  </li>
+                  <AccountRow
+                    key={a.id}
+                    account={a}
+                    onChanged={() => {
+                      mutateCalendars();
+                      // Server component needs a full refresh to update myAccounts
+                      window.location.reload();
+                    }}
+                  />
                 ))}
               </ul>
             </div>
@@ -209,6 +212,52 @@ export function SettingsClient({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function AccountRow({
+  account,
+  onChanged,
+}: {
+  account: Account;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  const disconnect = async () => {
+    if (
+      !confirm(
+        `Disconnect ${account.provider === "microsoft" ? "Microsoft" : "Google"} (${account.externalAccountId})?\n\nLiefdesnestje stops syncing and removes the local copy of all calendars + events from this account. Nothing changes in the source ${account.provider === "microsoft" ? "Outlook" : "Google Calendar"}.`
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/calendar-accounts/${account.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Disconnected");
+      onChanged();
+    } catch {
+      toast.error("Couldn't disconnect. Try again.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="flex items-center justify-between text-sm py-1">
+      <div>
+        <span className="capitalize font-medium">{account.provider}</span> — {account.externalAccountId}
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={disconnect}
+        disabled={busy}
+        className="text-zinc-500 hover:text-red-500"
+      >
+        {busy ? "Disconnecting…" : "Disconnect"}
+      </Button>
+    </li>
   );
 }
 
