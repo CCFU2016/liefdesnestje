@@ -1,6 +1,6 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
-import { events, todos, todoLists, trips } from "@/lib/db/schema";
+import { calendars, events, externalCalendarAccounts, householdMembers, todos, todoLists, trips } from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or, inArray } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInCalendarDays, endOfDay, format, startOfDay } from "date-fns";
@@ -13,22 +13,42 @@ export default async function TodayPage() {
   const dayStart = startOfDay(now);
   const dayEnd = endOfDay(now);
 
-  const [todayEvents, lists] = await Promise.all([
+  const [todayEventsRaw, lists, members] = await Promise.all([
     db
-      .select()
+      .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
+      .leftJoin(calendars, eq(events.calendarId, calendars.id))
+      .leftJoin(externalCalendarAccounts, eq(calendars.accountId, externalCalendarAccounts.id))
       .where(
         and(
           eq(events.householdId, ctx.householdId),
           isNull(events.deletedAt),
           gte(events.endsAt, dayStart),
           lte(events.startsAt, dayEnd),
-          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId))
+          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId)),
+          or(isNull(events.calendarId), eq(calendars.syncEnabled, true))
         )
       )
       .orderBy(events.startsAt),
     db.select().from(todoLists).where(eq(todoLists.householdId, ctx.householdId)),
+    db
+      .select({ userId: householdMembers.userId, displayName: householdMembers.displayName, color: householdMembers.color })
+      .from(householdMembers)
+      .where(eq(householdMembers.householdId, ctx.householdId)),
   ]);
+
+  const memberByUserId = new Map(members.map((m) => [m.userId, m]));
+
+  // Attach a display color to each event: calendar color if synced, else the
+  // author's member color.
+  const todayEvents = todayEventsRaw.map((r) => ({
+    ...r.event,
+    color:
+      r.calendar?.color ??
+      memberByUserId.get(r.account?.userId ?? r.event.authorId)?.color ??
+      "#71717a",
+    ownerName: memberByUserId.get(r.account?.userId ?? r.event.authorId)?.displayName,
+  }));
 
   const listIds = lists.map((l) => l.id);
   const topTodos = listIds.length
@@ -83,12 +103,16 @@ export default async function TodayPage() {
               <ul className="space-y-2">
                 {todayEvents.map((e) => (
                   <li key={e.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1 inline-block h-2 w-2 rounded-full bg-zinc-400" />
-                    <div>
-                      <div className="font-medium">{e.title}</div>
+                    <span
+                      className="mt-1.5 inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ background: e.color }}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{e.title}</div>
                       <div className="text-xs text-zinc-500">
                         {e.allDay ? "All day" : `${format(e.startsAt, "HH:mm")}–${format(e.endsAt, "HH:mm")}`}
                         {e.location ? ` · ${e.location}` : ""}
+                        {e.ownerName && ` · ${e.ownerName}`}
                       </div>
                     </div>
                   </li>

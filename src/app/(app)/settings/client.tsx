@@ -199,18 +199,138 @@ export function SettingsClient({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>You ({me?.displayName})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="inline-block h-6 w-6 rounded-full" style={{ background: me?.color }} />
-            <span className="text-zinc-500">Display color</span>
+      {me && (
+        <Card>
+          <CardHeader>
+            <CardTitle>You</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <YouEditor
+              me={me}
+              takenColors={members.filter((m) => m.userId !== currentUserId).map((m) => m.color)}
+            />
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+const PRESET_COLORS = [
+  "#4f46e5", // indigo
+  "#e11d48", // rose
+  "#059669", // emerald
+  "#d97706", // amber
+  "#7c3aed", // violet
+  "#0891b2", // cyan
+  "#db2777", // pink
+  "#0d9488", // teal
+  "#ea580c", // orange
+  "#2563eb", // blue
+];
+
+function YouEditor({ me, takenColors }: { me: Member; takenColors: string[] }) {
+  const [name, setName] = useState(me.displayName);
+  const [color, setColor] = useState(me.color);
+  const [editingName, setEditingName] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (body: { displayName?: string; color?: string }) => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/members/me", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
+      toast.success("Saved");
+      // Sidebar avatar + colors across the app come from the server component,
+      // so force a refresh.
+      setTimeout(() => window.location.reload(), 300);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickColor = (hex: string) => {
+    if (hex === color) return;
+    setColor(hex);
+    save({ color: hex });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <p className="text-xs uppercase tracking-wider text-zinc-500">Display name</p>
+        {editingName ? (
+          <div className="flex gap-2">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+              disabled={busy}
+            />
+            <Button
+              size="sm"
+              onClick={async () => {
+                if (name.trim() && name !== me.displayName) await save({ displayName: name.trim() });
+                else setEditingName(false);
+              }}
+              disabled={busy}
+            >
+              Save
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setEditingName(false);
+                setName(me.displayName);
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
           </div>
-          {/* TODO(liefdesnestje): allow renaming / changing color */}
-        </CardContent>
-      </Card>
+        ) : (
+          <div className="flex items-center gap-3 text-sm">
+            <span>{me.displayName}</span>
+            <Button size="sm" variant="ghost" onClick={() => setEditingName(true)} className="h-7">
+              Change
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <p className="text-xs uppercase tracking-wider text-zinc-500">Display color</p>
+        <div className="flex flex-wrap gap-2">
+          {PRESET_COLORS.map((hex) => {
+            const taken = takenColors.includes(hex);
+            const selected = color === hex;
+            return (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => !taken && pickColor(hex)}
+                disabled={taken || busy}
+                aria-label={hex}
+                className={`h-8 w-8 rounded-full ring-offset-2 transition-all ${
+                  selected ? "ring-2 ring-zinc-900 dark:ring-zinc-50 scale-110" : ""
+                } ${taken ? "opacity-30 cursor-not-allowed" : "hover:scale-105"}`}
+                style={{ background: hex }}
+                title={taken ? "Already taken by your partner" : undefined}
+              />
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-zinc-500">
+          Your color is used for your todos, events, and assignee dots.
+        </p>
+      </div>
     </div>
   );
 }

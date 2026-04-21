@@ -238,6 +238,32 @@ export function CalendarShell({
             </button>
             <span>{calendars.filter((c) => !hiddenCalendars.has(c.id)).length} calendars</span>
           </div>
+
+          {/* Legend — what each color means */}
+          {(calendars.length > 0 || members.length > 0) && (
+            <div className="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
+              <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-2">Legend</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                {calendars.filter((c) => !hiddenCalendars.has(c.id)).map((c) => (
+                  <div key={c.id} className="flex items-center gap-1.5">
+                    <span className="inline-block h-3 w-3 rounded-sm" style={{ background: c.color }} />
+                    <span>{c.name}</span>
+                  </div>
+                ))}
+                {members.length > 0 && (
+                  <>
+                    <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                    {members.map((m) => (
+                      <div key={m.userId} className="flex items-center gap-1.5">
+                        <span className="inline-block h-3 w-3 rounded-full" style={{ background: m.color }} />
+                        <span>{m.displayName}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           {isLoading && <div className="text-xs text-zinc-500 mt-2">Loading…</div>}
         </div>
       </div>
