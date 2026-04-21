@@ -7,7 +7,7 @@ import {
   CheckSquare,
   Home,
   NotebookText,
-  Plane,
+  CalendarRange,
   Settings as SettingsIcon,
   UtensilsCrossed,
 } from "lucide-react";
@@ -19,7 +19,7 @@ const items = [
   { href: "/todos", label: "To-dos", icon: CheckSquare },
   { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
-  { href: "/holidays", label: "Holidays", icon: Plane },
+  { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

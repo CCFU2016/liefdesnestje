@@ -16,6 +16,7 @@ const patchSchema = z.object({
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   forPersons: z.array(z.string().uuid()).optional(),
+  categoryId: z.string().uuid().nullable().optional(),
   pushToCalendar: z.boolean().optional(),
   pushProvider: z.enum(["google", "microsoft"]).optional(),
   visibility: z.enum(["private", "shared"]).optional(),
@@ -82,6 +83,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.data.startsOn !== undefined) update.startsOn = body.data.startsOn;
     if (body.data.endsOn !== undefined) update.endsOn = body.data.endsOn;
     if (body.data.forPersons !== undefined) update.forPersons = body.data.forPersons;
+    if (body.data.categoryId !== undefined) update.categoryId = body.data.categoryId;
     if (body.data.visibility !== undefined) update.visibility = body.data.visibility;
     if (body.data.pushToCalendar !== undefined) update.pushToCalendar = body.data.pushToCalendar;
 

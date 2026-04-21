@@ -226,8 +226,8 @@ export default async function TodayPage() {
         {nextHoliday && (
           <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Next holiday</CardTitle>
-              <Link href="/holidays" className="text-xs text-zinc-500 hover:underline">Open holidays</Link>
+              <CardTitle>Next event</CardTitle>
+              <Link href="/events" className="text-xs text-zinc-500 hover:underline">Open events</Link>
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline justify-between">

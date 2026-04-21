@@ -5,6 +5,7 @@ import { externalCalendarAccounts, holidays, householdMembers } from "@/lib/db/s
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 import { pushHolidayToCalendar } from "@/lib/calendar-push";
+import { ensureDefaultCategories } from "@/lib/event-categories";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -12,6 +13,7 @@ const createSchema = z.object({
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   forPersons: z.array(z.string().uuid()).default([]),
+  categoryId: z.string().uuid().nullable().optional(),
   pushToCalendar: z.boolean().default(false),
   pushProvider: z.enum(["google", "microsoft"]).nullable().optional(),
   visibility: z.enum(["private", "shared"]).default("shared"),
@@ -20,6 +22,7 @@ const createSchema = z.object({
 export async function GET() {
   try {
     const ctx = await requireHouseholdMember();
+    await ensureDefaultCategories(ctx.householdId);
 
     const rows = await db
       .select()
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
         startsOn: body.data.startsOn,
         endsOn: body.data.endsOn ?? null,
         forPersons: body.data.forPersons,
+        categoryId: body.data.categoryId ?? null,
         pushToCalendar: body.data.pushToCalendar,
         visibility: body.data.visibility,
       })

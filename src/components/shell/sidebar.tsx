@@ -7,7 +7,7 @@ import {
   CheckSquare,
   NotebookText,
   Home,
-  Plane,
+  CalendarRange,
   Settings as SettingsIcon,
   Wallet,
   Image as ImageIcon,
@@ -25,7 +25,7 @@ const primary: NavItem[] = [
   { href: "/todos", label: "To-dos", icon: CheckSquare },
   { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
-  { href: "/holidays", label: "Holidays", icon: Plane },
+  { href: "/events", label: "Events", icon: CalendarRange },
 ];
 
 const secondary: NavItem[] = [

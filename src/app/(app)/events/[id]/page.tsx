@@ -1,6 +1,6 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
-import { holidays, householdMembers } from "@/lib/db/schema";
+import { eventCategories, holidays, householdMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarCheck, ExternalLink } from "lucide-react";
 
-export default async function HolidayDetailPage({
+export default async function EventDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -29,6 +29,10 @@ export default async function HolidayDetailPage({
     .from(householdMembers)
     .where(eq(householdMembers.householdId, ctx.householdId));
 
+  const category = h.categoryId
+    ? (await db.select().from(eventCategories).where(eq(eventCategories.id, h.categoryId)).limit(1))[0]
+    : null;
+
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
   const start = parseYmd(h.startsOn);
   const now = new Date();
@@ -38,7 +42,7 @@ export default async function HolidayDetailPage({
   return (
     <div className="mx-auto max-w-3xl p-4 md:p-8">
       <div className="mb-4">
-        <Link href="/holidays" className="text-sm text-zinc-500 hover:underline">← Back to holidays</Link>
+        <Link href="/events" className="text-sm text-zinc-500 hover:underline">← Back to events</Link>
       </div>
 
       <div className="flex items-start justify-between gap-3 mb-4">
@@ -54,6 +58,25 @@ export default async function HolidayDetailPage({
           <div className="text-xs text-zinc-500">{daysAway < 0 ? "days ago" : "days away"}</div>
         </div>
       </div>
+
+      {category && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs uppercase tracking-wider text-zinc-500">Category:</span>
+          <span
+            className="text-xs px-2 py-0.5 rounded-full flex items-center gap-1"
+            style={{
+              background: category.color ? `${category.color}22` : "rgb(244 244 245)",
+              color: category.color ?? "inherit",
+            }}
+          >
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ background: category.color ?? "currentColor" }}
+            />
+            {category.name}
+          </span>
+        </div>
+      )}
 
       {h.forPersons.length > 0 && (
         <div className="flex items-center gap-2 mb-4">
@@ -107,7 +130,7 @@ export default async function HolidayDetailPage({
 
       {h.authorId === ctx.userId && (
         <div className="mt-4">
-          <Link href="/holidays">
+          <Link href="/events">
             <Button variant="ghost" size="sm">Edit from the list</Button>
           </Link>
         </div>

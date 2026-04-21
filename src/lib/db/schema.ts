@@ -278,7 +278,27 @@ export const notes = pgTable(
   ]
 );
 
-// --- Holidays (v2 — replaces the v1 trips stub) ---
+// --- Events (user-facing name). Table kept as "holidays" because "events"
+// is already taken by the calendar events table. Each item optionally
+// references an event_category (household-scoped, user-managed).
+
+export const eventCategories = pgTable(
+  "event_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: varchar("color", { length: 7 }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("event_categories_household_idx").on(t.householdId),
+    uniqueIndex("event_categories_household_name_uniq").on(t.householdId, t.name),
+  ]
+);
 
 export const holidays = pgTable(
   "holidays",
@@ -290,6 +310,9 @@ export const holidays = pgTable(
     authorId: uuid("author_id")
       .notNull()
       .references(() => users.id),
+    categoryId: uuid("category_id").references(() => eventCategories.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     description: text("description"),
     startsOn: text("starts_on").notNull(), // date-only, stored as YYYY-MM-DD
@@ -307,7 +330,11 @@ export const holidays = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (t) => [index("holidays_household_idx").on(t.householdId), index("holidays_starts_idx").on(t.startsOn)]
+  (t) => [
+    index("holidays_household_idx").on(t.householdId),
+    index("holidays_starts_idx").on(t.startsOn),
+    index("holidays_category_idx").on(t.categoryId),
+  ]
 );
 
 // --- Recipes + meal planning (v2) ---
@@ -476,6 +503,18 @@ export const notesRelations = relations(notes, ({ one }) => ({
 export const holidaysRelations = relations(holidays, ({ one }) => ({
   household: one(households, { fields: [holidays.householdId], references: [households.id] }),
   author: one(users, { fields: [holidays.authorId], references: [users.id] }),
+  category: one(eventCategories, {
+    fields: [holidays.categoryId],
+    references: [eventCategories.id],
+  }),
+}));
+
+export const eventCategoriesRelations = relations(eventCategories, ({ one, many }) => ({
+  household: one(households, {
+    fields: [eventCategories.householdId],
+    references: [households.id],
+  }),
+  events: many(holidays),
 }));
 
 export const recipesRelations = relations(recipes, ({ one, many }) => ({
@@ -506,6 +545,7 @@ export type TodoList = typeof todoLists.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Note = typeof notes.$inferSelect;
 export type Holiday = typeof holidays.$inferSelect;
+export type EventCategory = typeof eventCategories.$inferSelect;
 export type Recipe = typeof recipes.$inferSelect;
 export type RecipeFavorite = typeof recipeFavorites.$inferSelect;
 export type MealPlanEntry = typeof mealPlanEntries.$inferSelect;

@@ -1,13 +1,20 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
-import { externalCalendarAccounts, holidays, householdMembers } from "@/lib/db/schema";
+import {
+  eventCategories,
+  externalCalendarAccounts,
+  holidays,
+  householdMembers,
+} from "@/lib/db/schema";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
-import { HolidaysClient } from "./client";
+import { ensureDefaultCategories } from "@/lib/event-categories";
+import { EventsClient } from "./client";
 
-export default async function HolidaysPage() {
+export default async function EventsPage() {
   const ctx = await requireHouseholdMember();
+  await ensureDefaultCategories(ctx.householdId);
 
-  const [rows, members, myAccounts] = await Promise.all([
+  const [rows, members, myAccounts, categories] = await Promise.all([
     db
       .select()
       .from(holidays)
@@ -31,16 +38,24 @@ export default async function HolidaysPage() {
       .select({ provider: externalCalendarAccounts.provider })
       .from(externalCalendarAccounts)
       .where(eq(externalCalendarAccounts.userId, ctx.userId)),
+    db
+      .select()
+      .from(eventCategories)
+      .where(eq(eventCategories.householdId, ctx.householdId))
+      .orderBy(asc(eventCategories.sortOrder), asc(eventCategories.name)),
   ]);
 
-  const connectedProviders = Array.from(new Set(myAccounts.map((a) => a.provider))) as Array<"google" | "microsoft">;
+  const connectedProviders = Array.from(new Set(myAccounts.map((a) => a.provider))) as Array<
+    "google" | "microsoft"
+  >;
 
   return (
-    <HolidaysClient
-      initialHolidays={rows}
+    <EventsClient
+      initialEvents={rows}
       members={members}
       currentUserId={ctx.userId}
       connectedProviders={connectedProviders}
+      categories={categories}
     />
   );
 }

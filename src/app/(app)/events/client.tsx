@@ -4,23 +4,31 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Calendar, CalendarCheck, Plus, AlertCircle } from "lucide-react";
-import { addDays, differenceInCalendarDays, format, isBefore } from "date-fns";
+import { Calendar, CalendarCheck, Plus, AlertCircle, Tag } from "lucide-react";
+import { differenceInCalendarDays, format, isBefore } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import * as Dialog from "@radix-ui/react-dialog";
 
 type Member = { userId: string; displayName: string; color: string };
 
-type Holiday = {
+type Category = {
+  id: string;
+  name: string;
+  color: string | null;
+  sortOrder: number;
+};
+
+type Event = {
   id: string;
   title: string;
   description: string | null;
   startsOn: string;
   endsOn: string | null;
   forPersons: string[];
+  categoryId: string | null;
   pushToCalendar: boolean;
   externalCalendarEventId: string | null;
   externalCalendarProvider: "google" | "microsoft" | null;
@@ -36,52 +44,111 @@ function parseYmd(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
-export function HolidaysClient({
-  initialHolidays,
+export function EventsClient({
+  initialEvents,
   members,
   currentUserId,
   connectedProviders,
+  categories: initialCategories,
 }: {
-  initialHolidays: Holiday[];
+  initialEvents: Event[];
   members: Member[];
   currentUserId: string;
   connectedProviders: Array<"google" | "microsoft">;
+  categories: Category[];
 }) {
-  const [dialog, setDialog] = useState<{ existing?: Holiday } | null>(null);
+  const [dialog, setDialog] = useState<{ existing?: Event } | null>(null);
+  const [filterCategoryId, setFilterCategoryId] = useState<string | null | "uncategorized">(null);
 
-  const { data, mutate } = useSWR<{ holidays: Holiday[] }>(`/api/holidays`, fetcher, {
-    fallbackData: { holidays: initialHolidays },
+  const { data, mutate } = useSWR<{ holidays: Event[] }>(`/api/holidays`, fetcher, {
+    fallbackData: { holidays: initialEvents },
     refreshInterval: 10000,
   });
-  const items = data?.holidays ?? initialHolidays;
+  const items = data?.holidays ?? initialEvents;
+
+  const { data: catData, mutate: mutateCategories } = useSWR<{ categories: Category[] }>(
+    `/api/event-categories`,
+    fetcher,
+    { fallbackData: { categories: initialCategories } }
+  );
+  const categories = catData?.categories ?? initialCategories;
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const filtered = useMemo(() => {
+    if (filterCategoryId === null) return items;
+    if (filterCategoryId === "uncategorized") return items.filter((e) => !e.categoryId);
+    return items.filter((e) => e.categoryId === filterCategoryId);
+  }, [items, filterCategoryId]);
+
   const { upcoming, past } = useMemo(() => {
-    const up: Holiday[] = [];
-    const pa: Holiday[] = [];
-    for (const h of items) {
+    const up: Event[] = [];
+    const pa: Event[] = [];
+    for (const h of filtered) {
       if (isBefore(parseYmd(h.startsOn), today)) pa.push(h);
       else up.push(h);
     }
     return { upcoming: up, past: pa.reverse() };
-  }, [items, today]);
+  }, [filtered, today]);
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
+
+  const uncatCount = items.filter((e) => !e.categoryId).length;
 
   return (
     <div className="mx-auto max-w-4xl p-4 md:p-8">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Holidays</h1>
+        <h1 className="text-2xl font-semibold">Events</h1>
         <Button onClick={() => setDialog({})}>
-          <Plus className="h-4 w-4" /> New holiday
+          <Plus className="h-4 w-4" /> New event
         </Button>
       </div>
 
+      {categories.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          <FilterChip
+            active={filterCategoryId === null}
+            onClick={() => setFilterCategoryId(null)}
+          >
+            All ({items.length})
+          </FilterChip>
+          {categories.map((c) => {
+            const count = items.filter((e) => e.categoryId === c.id).length;
+            return (
+              <FilterChip
+                key={c.id}
+                active={filterCategoryId === c.id}
+                color={c.color ?? undefined}
+                onClick={() => setFilterCategoryId(c.id)}
+              >
+                {c.name} ({count})
+              </FilterChip>
+            );
+          })}
+          {uncatCount > 0 && (
+            <FilterChip
+              active={filterCategoryId === "uncategorized"}
+              onClick={() => setFilterCategoryId("uncategorized")}
+            >
+              uncategorized ({uncatCount})
+            </FilterChip>
+          )}
+          <Link
+            href="/settings#categories"
+            className="text-xs px-2 py-0.5 rounded-full text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 flex items-center gap-1"
+          >
+            <Tag className="h-3 w-3" /> manage
+          </Link>
+        </div>
+      )}
+
       {upcoming.length === 0 && past.length === 0 && (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-10 text-center text-sm text-zinc-500">
-          No holidays planned yet. Add your next trip or a day off.
+          {filterCategoryId
+            ? "No events in this category."
+            : "No events planned yet. Add your next trip, milestone, or day off."}
         </div>
       )}
 
@@ -89,10 +156,11 @@ export function HolidaysClient({
         <section className="space-y-3">
           <h2 className="text-xs uppercase tracking-wider text-zinc-500">Upcoming</h2>
           {upcoming.map((h) => (
-            <HolidayCard
+            <EventCard
               key={h.id}
-              holiday={h}
+              event={h}
               memberByUserId={memberByUserId}
+              category={h.categoryId ? categoryById.get(h.categoryId) : undefined}
               canEdit={h.authorId === currentUserId}
               onEdit={() => setDialog({ existing: h })}
             />
@@ -107,10 +175,11 @@ export function HolidaysClient({
           </summary>
           <div className="mt-3 space-y-3 opacity-60">
             {past.map((h) => (
-              <HolidayCard
+              <EventCard
                 key={h.id}
-                holiday={h}
+                event={h}
                 memberByUserId={memberByUserId}
+                category={h.categoryId ? categoryById.get(h.categoryId) : undefined}
                 canEdit={h.authorId === currentUserId}
                 onEdit={() => setDialog({ existing: h })}
               />
@@ -120,33 +189,69 @@ export function HolidaysClient({
       )}
 
       {dialog && (
-        <HolidayDialog
+        <EventDialog
           existing={dialog.existing}
           members={members}
+          categories={categories}
           connectedProviders={connectedProviders}
           onClose={() => setDialog(null)}
           onSaved={() => {
             setDialog(null);
             mutate();
+            mutateCategories();
           }}
+          onCategoryCreated={() => mutateCategories()}
         />
       )}
     </div>
   );
 }
 
-function HolidayCard({
-  holiday,
+function FilterChip({
+  active,
+  onClick,
+  color,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  color?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${
+        active
+          ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-50 dark:text-zinc-900 dark:border-zinc-50"
+          : "bg-transparent text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-500"
+      }`}
+    >
+      {color && (
+        <span
+          className="inline-block h-2 w-2 rounded-full mr-1 align-middle"
+          style={{ background: color }}
+        />
+      )}
+      {children}
+    </button>
+  );
+}
+
+function EventCard({
+  event,
   memberByUserId,
+  category,
   canEdit,
   onEdit,
 }: {
-  holiday: Holiday;
+  event: Event;
   memberByUserId: Map<string, Member>;
+  category?: Category;
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const start = parseYmd(holiday.startsOn);
+  const start = parseYmd(event.startsOn);
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   const daysAway = differenceInCalendarDays(start, now);
@@ -157,36 +262,50 @@ function HolidayCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <Link href={`/holidays/${holiday.id}`} className="font-semibold truncate hover:underline">
-                {holiday.title}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link href={`/events/${event.id}`} className="font-semibold truncate hover:underline">
+                {event.title}
               </Link>
-              {holiday.pushToCalendar && holiday.externalCalendarEventId && (
+              {category && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-1"
+                  style={{
+                    background: category.color
+                      ? `${category.color}22` // 13% alpha
+                      : "rgb(244 244 245)",
+                    color: category.color ?? "inherit",
+                  }}
+                >
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ background: category.color ?? "currentColor" }}
+                  />
+                  {category.name}
+                </span>
+              )}
+              {event.pushToCalendar && event.externalCalendarEventId && (
                 <CalendarCheck className="h-3.5 w-3.5 text-emerald-500" />
               )}
-              {holiday.pushToCalendar && !holiday.externalCalendarEventId && (
+              {event.pushToCalendar && !event.externalCalendarEventId && (
                 <span title="Push pending or failed">
                   <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
                 </span>
               )}
-              {holiday.visibility === "private" && (
+              {event.visibility === "private" && (
                 <span className="text-[10px] uppercase tracking-wider text-zinc-500">private</span>
               )}
             </div>
             <div className="text-sm text-zinc-500 mt-0.5">
               {format(start, "d MMM yyyy")}
-              {holiday.endsOn && ` – ${format(parseYmd(holiday.endsOn), "d MMM yyyy")}`}
+              {event.endsOn && ` – ${format(parseYmd(event.endsOn), "d MMM yyyy")}`}
             </div>
-            {holiday.forPersons.length > 0 && (
-              <div className="flex items-center gap-1 mt-1.5">
-                {holiday.forPersons.map((uid) => {
+            {event.forPersons.length > 0 && (
+              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                {event.forPersons.map((uid) => {
                   const m = memberByUserId.get(uid);
                   if (!m) return null;
                   return (
-                    <span
-                      key={uid}
-                      className="flex items-center gap-1 text-[11px] text-zinc-500"
-                    >
+                    <span key={uid} className="flex items-center gap-1 text-[11px] text-zinc-500">
                       <span
                         className="inline-block h-2 w-2 rounded-full"
                         style={{ background: m.color }}
@@ -213,18 +332,22 @@ function HolidayCard({
   );
 }
 
-function HolidayDialog({
+function EventDialog({
   existing,
   members,
+  categories,
   connectedProviders,
   onClose,
   onSaved,
+  onCategoryCreated,
 }: {
-  existing?: Holiday;
+  existing?: Event;
   members: Member[];
+  categories: Category[];
   connectedProviders: Array<"google" | "microsoft">;
   onClose: () => void;
   onSaved: () => void;
+  onCategoryCreated: () => void;
 }) {
   const [title, setTitle] = useState(existing?.title ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
@@ -233,6 +356,9 @@ function HolidayDialog({
   const [forPersons, setForPersons] = useState<Set<string>>(
     new Set(existing?.forPersons ?? members.map((m) => m.userId))
   );
+  const [categoryId, setCategoryId] = useState<string | null>(
+    existing?.categoryId ?? categories[0]?.id ?? null
+  );
   const [pushToCalendar, setPushToCalendar] = useState(existing?.pushToCalendar ?? false);
   const [pushProvider, setPushProvider] = useState<"google" | "microsoft">(
     existing?.externalCalendarProvider ?? connectedProviders[0] ?? "google"
@@ -240,12 +366,37 @@ function HolidayDialog({
   const [isPrivate, setIsPrivate] = useState(existing?.visibility === "private");
   const [docFile, setDocFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const togglePerson = (uid: string) => {
     const next = new Set(forPersons);
     if (next.has(uid)) next.delete(uid);
     else next.add(uid);
     setForPersons(next);
+  };
+
+  const createCategory = async () => {
+    const name = newCategoryName.trim().toLowerCase();
+    if (!name) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/event-categories", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Create failed");
+      const { category } = await res.json();
+      onCategoryCreated();
+      setCategoryId(category.id);
+      setNewCategoryName("");
+      setAddingCategory(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Create failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const save = async () => {
@@ -258,6 +409,7 @@ function HolidayDialog({
         startsOn,
         endsOn: endsOn || null,
         forPersons: Array.from(forPersons),
+        categoryId,
         pushToCalendar,
         pushProvider: pushToCalendar ? pushProvider : null,
         visibility: isPrivate ? "private" : "shared",
@@ -275,18 +427,18 @@ function HolidayDialog({
           });
       if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
       const body = await res.json();
-      const holidayId = body.holiday.id;
+      const eventId = body.holiday.id;
 
       if (body.warning) toast.message(body.warning);
 
       if (docFile) {
         const fd = new FormData();
         fd.append("file", docFile);
-        const up = await fetch(`/api/holidays/${holidayId}/document`, { method: "POST", body: fd });
-        if (!up.ok) toast.error("Holiday saved, but the document upload failed.");
+        const up = await fetch(`/api/holidays/${eventId}/document`, { method: "POST", body: fd });
+        if (!up.ok) toast.error("Event saved, but the document upload failed.");
       }
 
-      toast.success(existing ? "Saved" : "Holiday added");
+      toast.success(existing ? "Saved" : "Event added");
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
@@ -316,7 +468,7 @@ function HolidayDialog({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 max-h-[90vh] overflow-y-auto">
           <Dialog.Title className="text-lg font-semibold">
-            {existing ? "Edit holiday" : "New holiday"}
+            {existing ? "Edit event" : "New event"}
           </Dialog.Title>
 
           <div className="mt-4 space-y-3">
@@ -343,6 +495,54 @@ function HolidayDialog({
             </div>
 
             <div className="space-y-1.5">
+              <Label>Category</Label>
+              {addingCategory ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="New category name"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") createCategory();
+                    }}
+                    autoFocus
+                  />
+                  <Button size="sm" onClick={createCategory} disabled={busy}>
+                    Add
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAddingCategory(false);
+                      setNewCategoryName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 h-9 rounded-md border border-zinc-200 bg-transparent px-3 text-sm dark:border-zinc-800"
+                    value={categoryId ?? ""}
+                    onChange={(e) => setCategoryId(e.target.value || null)}
+                  >
+                    <option value="">— uncategorized —</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" variant="ghost" onClick={() => setAddingCategory(true)}>
+                    + new
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
               <Label>For</Label>
               <div className="flex flex-wrap gap-2">
                 {members.map((m) => (
@@ -352,7 +552,10 @@ function HolidayDialog({
                       checked={forPersons.has(m.userId)}
                       onChange={() => togglePerson(m.userId)}
                     />
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} />
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ background: m.color }}
+                    />
                     {m.displayName}
                   </label>
                 ))}
@@ -378,7 +581,12 @@ function HolidayDialog({
                 className="block w-full text-sm"
               />
               {existing?.documentUrl && !docFile && (
-                <a href={existing.documentUrl} target="_blank" rel="noreferrer" className="text-xs text-zinc-500 underline">
+                <a
+                  href={existing.documentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-zinc-500 underline"
+                >
                   Current document
                 </a>
               )}
@@ -397,7 +605,11 @@ function HolidayDialog({
               </label>
               {connectedProviders.length === 0 ? (
                 <p className="text-xs text-zinc-500">
-                  Connect a calendar in <Link href="/settings" className="underline">Settings</Link> to enable.
+                  Connect a calendar in{" "}
+                  <Link href="/settings" className="underline">
+                    Settings
+                  </Link>{" "}
+                  to enable.
                 </p>
               ) : connectedProviders.length > 1 && pushToCalendar ? (
                 <select
@@ -434,7 +646,9 @@ function HolidayDialog({
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+              <Button variant="ghost" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
               <Button onClick={save} disabled={busy}>
                 {busy ? "Saving…" : existing ? "Save" : "Create"}
               </Button>
@@ -450,6 +664,3 @@ function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-
-// guard against unused imports complaining
-void addDays;
