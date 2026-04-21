@@ -1,7 +1,7 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { CalendarShell } from "@/components/calendar/calendar-shell";
 
 export default async function CalendarPage() {
@@ -30,7 +30,8 @@ export default async function CalendarPage() {
           eq(calendars.householdId, ctx.householdId)
         )!
       )
-    );
+    )
+    .orderBy(asc(calendars.name));
 
   return (
     <CalendarShell
