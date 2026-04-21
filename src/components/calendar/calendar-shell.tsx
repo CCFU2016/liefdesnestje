@@ -87,7 +87,9 @@ export function CalendarShell({
 }) {
   const [onMobile, setOnMobile] = useState(false);
   useEffect(() => setOnMobile(isMobile()), []);
-  const [view, setView] = useState<View>(isMobile() ? "agenda" : ("week" as View));
+  const [view, setView] = useState<View>(
+    isMobile() ? ("threeDay" as unknown as View) : ("week" as View)
+  );
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<{
