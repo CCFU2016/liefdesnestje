@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +36,7 @@ export type RecipeFormValue = {
   nutritionPerServing: Nutrition | null;
   sourceUrl: string | null;
   imageUrl: string | null;
+  score: number | null;
   visibility: "private" | "shared";
 };
 
@@ -51,7 +52,16 @@ const EMPTY: RecipeFormValue = {
   nutritionPerServing: null,
   sourceUrl: null,
   imageUrl: null,
+  score: null,
   visibility: "shared",
+};
+
+const EMPTY_NUTRITION: Nutrition = {
+  calories: null,
+  protein: null,
+  carbs: null,
+  fat: null,
+  fiber: null,
 };
 
 export function RecipeForm({
@@ -190,6 +200,85 @@ export function RecipeForm({
               onChange={(e) => setValue({ ...value, sourceUrl: e.target.value || null })}
               placeholder="Where this recipe came from"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Your score (optional)</Label>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setValue({ ...value, score: value.score === n ? null : n })}
+                  className={`p-1 rounded transition-colors ${
+                    value.score != null && n <= value.score
+                      ? "text-amber-500"
+                      : "text-zinc-300 hover:text-zinc-500"
+                  }`}
+                  aria-label={`${n} star${n > 1 ? "s" : ""}`}
+                >
+                  <Star
+                    className={`h-6 w-6 ${
+                      value.score != null && n <= value.score ? "fill-amber-500" : ""
+                    }`}
+                  />
+                </button>
+              ))}
+              {value.score != null && (
+                <button
+                  type="button"
+                  className="ml-1 text-xs text-zinc-500 underline"
+                  onClick={() => setValue({ ...value, score: null })}
+                >
+                  clear
+                </button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Nutrition (per serving, optional)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {[
+              { key: "calories" as const, label: "kcal" },
+              { key: "protein" as const, label: "protein (g)" },
+              { key: "carbs" as const, label: "carbs (g)" },
+              { key: "fat" as const, label: "fat (g)" },
+              { key: "fiber" as const, label: "fiber (g)" },
+            ].map((f) => {
+              const cur = value.nutritionPerServing ?? EMPTY_NUTRITION;
+              return (
+                <div key={f.key} className="space-y-1">
+                  <Label className="text-xs">{f.label}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.1"
+                    value={cur[f.key] ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const n = v === "" ? null : Number(v);
+                      const next: Nutrition = { ...cur, [f.key]: n };
+                      const allNull =
+                        next.calories == null &&
+                        next.protein == null &&
+                        next.carbs == null &&
+                        next.fat == null &&
+                        next.fiber == null;
+                      setValue({
+                        ...value,
+                        nutritionPerServing: allNull ? null : next,
+                      });
+                    }}
+                  />
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>

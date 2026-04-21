@@ -31,6 +31,7 @@ export default async function EditRecipePage({
         nutritionPerServing: r.nutritionPerServing as null,
         sourceUrl: r.sourceUrl,
         imageUrl: r.imageUrl,
+        score: r.score,
         visibility: r.visibility,
       }}
     />

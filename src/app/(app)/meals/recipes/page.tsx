@@ -19,6 +19,7 @@ export default async function RecipesPage() {
         tags: recipes.tags,
         imageUrl: recipes.imageUrl,
         cookedCount: recipes.cookedCount,
+        score: recipes.score,
         authorId: recipes.authorId,
         visibility: recipes.visibility,
         updatedAt: recipes.updatedAt,

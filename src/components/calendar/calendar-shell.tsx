@@ -202,64 +202,23 @@ export function CalendarShell({
     );
   }
 
+  const toggleCalendar = (id: string) => {
+    const next = new Set(hiddenCalendars);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setHiddenCalendars(next);
+  };
+
+  const syncNow = async () => {
+    await fetch("/api/calendar-sync", { method: "POST" });
+    mutate();
+    toast.success("Synced");
+  };
+
   return (
     <div className="mx-auto max-w-7xl p-4 md:p-6">
-      <div className="flex gap-4 md:gap-6">
-        <aside className="hidden md:block w-56 shrink-0 space-y-6">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold">Calendars</h3>
-            </div>
-            <ul className="space-y-1 text-sm">
-              {calendars.map((c) => {
-                const hidden = hiddenCalendars.has(c.id);
-                return (
-                  <li key={c.id}>
-                    <button
-                      className="flex w-full items-center gap-2 text-left opacity-100 hover:opacity-80"
-                      onClick={() => {
-                        const n = new Set(hiddenCalendars);
-                        if (hidden) n.delete(c.id);
-                        else n.add(c.id);
-                        setHiddenCalendars(n);
-                      }}
-                    >
-                      <span
-                        className="inline-block h-3 w-3 rounded-sm"
-                        style={{ background: hidden ? "transparent" : c.color, border: `2px solid ${c.color}` }}
-                      />
-                      <span className={hidden ? "line-through text-zinc-400" : ""}>{c.name}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold mb-2">Nest members</h3>
-            <ul className="space-y-1 text-sm">
-              {members.map((m) => (
-                <li key={m.userId} className="flex items-center gap-2">
-                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: m.color }} />
-                  <span>{m.displayName}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={async () => {
-              await fetch("/api/calendar-sync", { method: "POST" });
-              mutate();
-              toast.success("Synced");
-            }}
-          >
-            Sync now
-          </Button>
-        </aside>
-
-        <div className="flex-1 min-w-0">
+      <div>
+        <div className="min-w-0">
           {onMobile ? (
             <div style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}>
               <MobileTimeGrid
@@ -330,37 +289,52 @@ export function CalendarShell({
               />
             </div>
           )}
-          <div className="md:hidden mt-2 flex items-center justify-between text-xs text-zinc-500">
-            <button
-              onClick={async () => {
-                await fetch("/api/calendar-sync", { method: "POST" });
-                mutate();
-                toast.success("Synced");
-              }}
-              className="px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Sync now
-            </button>
-            <span>{calendars.filter((c) => !hiddenCalendars.has(c.id)).length} calendars</span>
-          </div>
-
-          {/* Legend — what each color means */}
+          {/* Legend — click a calendar to toggle its visibility */}
           {(calendars.length > 0 || members.length > 0) && (
-            <div className="mt-4 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-2">Legend</p>
+            <div className="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-[11px] uppercase tracking-wider text-zinc-500">
+                  Legend · tap to filter
+                </p>
+                <button
+                  onClick={syncNow}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 px-1.5 py-0.5 rounded"
+                >
+                  Sync now
+                </button>
+              </div>
               <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                {calendars.filter((c) => !hiddenCalendars.has(c.id)).map((c) => (
-                  <div key={c.id} className="flex items-center gap-1.5">
-                    <span className="inline-block h-3 w-3 rounded-sm" style={{ background: c.color }} />
-                    <span>{c.name}</span>
-                  </div>
-                ))}
+                {calendars.map((c) => {
+                  const hidden = hiddenCalendars.has(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => toggleCalendar(c.id)}
+                      className={`flex items-center gap-1.5 transition-opacity ${
+                        hidden ? "opacity-40" : "opacity-100 hover:opacity-80"
+                      }`}
+                      title={hidden ? "Click to show" : "Click to hide"}
+                    >
+                      <span
+                        className="inline-block h-3 w-3 rounded-sm"
+                        style={{
+                          background: hidden ? "transparent" : c.color,
+                          border: `2px solid ${c.color}`,
+                        }}
+                      />
+                      <span className={hidden ? "line-through" : ""}>{c.name}</span>
+                    </button>
+                  );
+                })}
                 {members.length > 0 && (
                   <>
                     <span className="text-zinc-300 dark:text-zinc-700">·</span>
                     {members.map((m) => (
                       <div key={m.userId} className="flex items-center gap-1.5">
-                        <span className="inline-block h-3 w-3 rounded-full" style={{ background: m.color }} />
+                        <span
+                          className="inline-block h-3 w-3 rounded-full"
+                          style={{ background: m.color }}
+                        />
                         <span>{m.displayName}</span>
                       </div>
                     ))}

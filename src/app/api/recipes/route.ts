@@ -32,6 +32,7 @@ const createSchema = z.object({
   nutritionPerServing: nutritionSchema.nullable().optional(),
   sourceUrl: z.string().url().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
+  score: z.number().int().min(1).max(5).nullable().optional(),
   visibility: z.enum(["private", "shared"]).default("shared"),
 });
 
@@ -64,6 +65,7 @@ export async function GET(req: Request) {
         tags: recipes.tags,
         imageUrl: recipes.imageUrl,
         cookedCount: recipes.cookedCount,
+        score: recipes.score,
         authorId: recipes.authorId,
         visibility: recipes.visibility,
         updatedAt: recipes.updatedAt,
@@ -118,6 +120,7 @@ export async function POST(req: Request) {
         nutritionPerServing: body.data.nutritionPerServing ?? null,
         sourceUrl: body.data.sourceUrl ?? null,
         imageUrl: body.data.imageUrl ?? null,
+        score: body.data.score ?? null,
         visibility: body.data.visibility,
       })
       .returning();

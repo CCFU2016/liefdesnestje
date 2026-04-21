@@ -33,6 +33,7 @@ const patchSchema = z.object({
     .optional(),
   sourceUrl: z.string().url().nullable().optional(),
   imageUrl: z.string().nullable().optional(),
+  score: z.number().int().min(1).max(5).nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
   cookedIncrement: z.boolean().optional(),
 });
@@ -89,6 +90,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (d.nutritionPerServing !== undefined) update.nutritionPerServing = d.nutritionPerServing;
     if (d.sourceUrl !== undefined) update.sourceUrl = d.sourceUrl;
     if (d.imageUrl !== undefined) update.imageUrl = d.imageUrl;
+    if (d.score !== undefined) update.score = d.score;
     if (d.visibility !== undefined) update.visibility = d.visibility;
     if (d.cookedIncrement === true) update.cookedCount = r.cookedCount + 1;
 

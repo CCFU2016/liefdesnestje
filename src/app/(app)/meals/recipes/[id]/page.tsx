@@ -47,6 +47,7 @@ export default async function RecipeDetailPage({
         sourceUrl: r.sourceUrl,
         imageUrl: r.imageUrl,
         cookedCount: r.cookedCount,
+        score: r.score,
         visibility: r.visibility,
         authorId: r.authorId,
       }}

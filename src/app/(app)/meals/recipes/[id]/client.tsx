@@ -29,12 +29,13 @@ type Recipe = {
   sourceUrl: string | null;
   imageUrl: string | null;
   cookedCount: number;
+  score: number | null;
   visibility: "private" | "shared";
   authorId: string;
 };
 
 export function RecipeDetailClient({
-  recipe,
+  recipe: initialRecipe,
   isFavorite: initialFav,
   canEdit,
 }: {
@@ -43,12 +44,29 @@ export function RecipeDetailClient({
   canEdit: boolean;
 }) {
   const router = useRouter();
+  const [recipe, setRecipe] = useState(initialRecipe);
   const [fav, setFav] = useState(initialFav);
   const [busy, setBusy] = useState(false);
 
   const toggleFavorite = async () => {
     setFav(!fav);
     await fetch(`/api/recipes/${recipe.id}/favorite`, { method: fav ? "DELETE" : "POST" });
+  };
+
+  const setScore = async (n: number | null) => {
+    const prev = recipe.score;
+    setRecipe({ ...recipe, score: n });
+    try {
+      const res = await fetch(`/api/recipes/${recipe.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ score: n }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setRecipe({ ...recipe, score: prev });
+      toast.error("Couldn't save the score.");
+    }
   };
 
   const remove = async () => {
@@ -115,6 +133,34 @@ export function RecipeDetailClient({
         )}
       </div>
 
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs uppercase tracking-wider text-zinc-500">Our score</span>
+        <div className="flex items-center gap-0.5">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setScore(recipe.score === n ? null : n)}
+              className={`p-0.5 rounded ${
+                recipe.score != null && n <= recipe.score
+                  ? "text-amber-500"
+                  : "text-zinc-300 hover:text-zinc-500"
+              }`}
+              aria-label={`${n} star${n > 1 ? "s" : ""}`}
+            >
+              <Star
+                className={`h-5 w-5 ${
+                  recipe.score != null && n <= recipe.score ? "fill-amber-500" : ""
+                }`}
+              />
+            </button>
+          ))}
+          {recipe.score == null && (
+            <span className="text-xs text-zinc-400 ml-1">not rated yet</span>
+          )}
+        </div>
+      </div>
+
       {recipe.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-6">
           {recipe.tags.map((t) => (
@@ -170,34 +216,41 @@ export function RecipeDetailClient({
         </Card>
       </div>
 
-      {recipe.nutritionPerServing && (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle>Nutrition (per serving)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-5 gap-2 text-xs">
-              {[
-                { label: "kcal", v: recipe.nutritionPerServing.calories },
-                { label: "protein", v: recipe.nutritionPerServing.protein, unit: "g" },
-                { label: "carbs", v: recipe.nutritionPerServing.carbs, unit: "g" },
-                { label: "fat", v: recipe.nutritionPerServing.fat, unit: "g" },
-                { label: "fiber", v: recipe.nutritionPerServing.fiber, unit: "g" },
-              ]
-                .filter((x) => x.v != null)
-                .map((x) => (
-                  <div key={x.label} className="text-center">
-                    <div className="text-lg font-semibold">
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Nutrition (per serving)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-5 gap-2 text-xs">
+            {[
+              { label: "kcal", v: recipe.nutritionPerServing?.calories, unit: "" },
+              { label: "protein", v: recipe.nutritionPerServing?.protein, unit: "g" },
+              { label: "carbs", v: recipe.nutritionPerServing?.carbs, unit: "g" },
+              { label: "fat", v: recipe.nutritionPerServing?.fat, unit: "g" },
+              { label: "fiber", v: recipe.nutritionPerServing?.fiber, unit: "g" },
+            ].map((x) => (
+              <div key={x.label} className="text-center">
+                <div className="text-lg font-semibold tabular-nums">
+                  {x.v != null ? (
+                    <>
                       {x.v}
-                      {x.unit ?? ""}
-                    </div>
-                    <div className="text-zinc-500">{x.label}</div>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                      {x.unit}
+                    </>
+                  ) : (
+                    <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                  )}
+                </div>
+                <div className="text-zinc-500">{x.label}</div>
+              </div>
+            ))}
+          </div>
+          {!recipe.nutritionPerServing && canEdit && (
+            <p className="text-[11px] text-zinc-500 mt-3 text-center">
+              No macros yet — <Link href={`/meals/recipes/${recipe.id}/edit`} className="underline">fill them in</Link>.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

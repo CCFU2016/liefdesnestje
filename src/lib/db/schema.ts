@@ -361,6 +361,7 @@ export const recipes = pgTable(
     sourceUrl: text("source_url"),
     imageUrl: text("image_url"),
     cookedCount: integer("cooked_count").notNull().default(0),
+    score: integer("score"), // 1-5, household-assigned rating (nullable = not yet rated)
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

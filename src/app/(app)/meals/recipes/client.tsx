@@ -18,6 +18,7 @@ type RecipeRow = {
   tags: string[];
   imageUrl: string | null;
   cookedCount: number;
+  score: number | null;
   authorId: string;
   visibility: "private" | "shared";
   updatedAt: string | Date;
@@ -155,7 +156,16 @@ export function RecipesClient({ initialRecipes }: { initialRecipes: RecipeRow[] 
                   <div className="h-40 bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900" />
                 )}
                 <div className="p-3">
-                  <div className="font-medium truncate">{r.title}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium truncate flex-1">{r.title}</div>
+                    {r.score != null && (
+                      <div className="flex items-center gap-0.5 shrink-0 text-amber-500">
+                        {Array.from({ length: r.score }).map((_, i) => (
+                          <Star key={i} className="h-3 w-3 fill-amber-500" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="text-xs text-zinc-500 mt-0.5">
                     {r.servings} serv
                     {r.cookTimeMinutes != null && ` · ${r.cookTimeMinutes} min`}
