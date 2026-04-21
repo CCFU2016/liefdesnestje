@@ -65,7 +65,7 @@ body {
   border-color: rgb(39 39 42);
 }
 
-/* Mobile: denser toolbar, larger tappable agenda rows */
+/* Mobile: denser toolbar, larger tappable agenda rows, capped all-day strip */
 @media (max-width: 767px) {
   .rbc-toolbar {
     font-size: 0.875rem;
@@ -78,6 +78,17 @@ body {
   }
   .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
     padding: 0.75rem 0.5rem;
+  }
+  /* All-day strip can have many stacked rows (subscriptions, recurring
+     all-day events, multi-day events). On a narrow screen this can eat
+     most of the calendar height, hiding the time grid. Cap it and let
+     the user scroll internally if needed. */
+  .rbc-time-view .rbc-allday-cell {
+    max-height: 96px;
+    overflow-y: auto;
+  }
+  .rbc-time-view .rbc-time-header-content {
+    max-height: 140px;
   }
 }
 
