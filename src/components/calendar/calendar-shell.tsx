@@ -1,10 +1,18 @@
 "use client";
 
-// Placeholder — fully built in Sprint 2 (Microsoft Graph two-way sync).
-// TODO(liefdesnestje): replace with react-big-calendar view + event CRUD.
-
+import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
+import { Calendar, dateFnsLocalizer, type View, type Event as RBCEvent } from "react-big-calendar";
+import { format, parse, startOfWeek, getDay } from "date-fns";
+import { enUS } from "date-fns/locale";
+import { toast } from "sonner";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { EventDialog } from "./event-dialog";
+
+const locales = { "en-US": enUS };
+const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
 
 type CalendarVM = {
   id: string;
@@ -21,6 +29,21 @@ type AccountVM = {
   externalAccountId: string;
 };
 
+type EventRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  location: string | null;
+  calendarId: string | null;
+  authorId: string;
+  visibility: "private" | "shared";
+};
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
 export function CalendarShell({
   members,
   accounts,
@@ -30,60 +53,205 @@ export function CalendarShell({
   accounts: AccountVM[];
   calendars: CalendarVM[];
 }) {
+  const [view, setView] = useState<View>(typeof window !== "undefined" && window.innerWidth < 768 ? "day" : "week");
+  const [anchor, setAnchor] = useState(new Date());
+  const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
+  const [dialog, setDialog] = useState<{
+    event?: EventRow;
+    slot?: { start: Date; end: Date };
+  } | null>(null);
+
+  const range = useMemo(() => rangeFor(view, anchor), [view, anchor]);
+  const key = accounts.length
+    ? `/api/events?from=${range.from.toISOString()}&to=${range.to.toISOString()}`
+    : null;
+
+  const { data, mutate, isLoading } = useSWR<{ events: EventRow[] }>(key, fetcher, {
+    refreshInterval: 30_000,
+  });
+
+  // On mount, trigger a background sync pull.
+  useEffect(() => {
+    if (accounts.length === 0) return;
+    fetch("/api/calendar-sync", { method: "POST" })
+      .then(() => mutate())
+      .catch(() => {});
+
+  }, []);
+
+  const calendarsById = useMemo(() => new Map(calendars.map((c) => [c.id, c])), [calendars]);
+
+  const rbcEvents: (RBCEvent & { resource: EventRow })[] = useMemo(() => {
+    const rows = data?.events ?? [];
+    return rows
+      .filter((e) => (e.calendarId ? !hiddenCalendars.has(e.calendarId) : true))
+      .map((e) => ({
+        title: e.title,
+        start: new Date(e.startsAt),
+        end: new Date(e.endsAt),
+        allDay: e.allDay,
+        resource: e,
+      }));
+  }, [data, hiddenCalendars]);
+
+  const eventStyleGetter = (event: RBCEvent) => {
+    const r = (event as RBCEvent & { resource: EventRow }).resource;
+    const cal = r.calendarId ? calendarsById.get(r.calendarId) : null;
+    const color = cal?.color ?? "#4f46e5";
+    return {
+      style: {
+        backgroundColor: color,
+        borderRadius: 4,
+        border: "none",
+        color: "white",
+        fontSize: 12,
+      },
+    };
+  };
+
   if (accounts.length === 0) {
     return (
       <div className="mx-auto max-w-2xl p-6 md:p-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Connect a calendar</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-zinc-500">
-              Link your Microsoft 365 calendar to see your events here and have Liefdesnestje sync both ways.
-            </p>
-            <Button onClick={() => (window.location.href = "/api/integrations/microsoft/start")}>
-              Connect Microsoft calendar
-            </Button>
-            <p className="text-xs text-zinc-500">
-              Google Calendar sync is coming soon.
-            </p>
-          </CardContent>
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-2">Connect a calendar</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Link your Microsoft 365 calendar to see your events here and have Liefdesnestje sync both ways.
+          </p>
+          <Button onClick={() => (window.location.href = "/api/integrations/microsoft/start")}>
+            Connect Microsoft calendar
+          </Button>
+          <p className="text-xs text-zinc-500 mt-3">Google Calendar sync is coming soon.</p>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6 md:p-8">
-      <div className="flex gap-6">
-        <aside className="hidden md:block w-56 shrink-0">
-          <h3 className="text-sm font-semibold mb-2">Calendars</h3>
-          <ul className="space-y-1 text-sm">
-            {calendars.map((c) => (
-              <li key={c.id} className="flex items-center gap-2">
-                <span className="inline-block h-3 w-3 rounded-full" style={{ background: c.color }} />
-                <span>{c.name}</span>
-              </li>
-            ))}
-          </ul>
-          <h3 className="text-sm font-semibold mt-6 mb-2">Nest members</h3>
-          <ul className="space-y-1 text-sm">
-            {members.map((m) => (
-              <li key={m.userId} className="flex items-center gap-2">
-                <span className="inline-block h-3 w-3 rounded-full" style={{ background: m.color }} />
-                <span>{m.displayName}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
-        <div className="flex-1">
-          <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 p-10 text-center text-sm text-zinc-500">
-            Calendar grid will render here once Sprint 2 is in.
-            <br />
-            {calendars.length} calendar{calendars.length === 1 ? "" : "s"} connected.
+    <div className="mx-auto max-w-7xl p-4 md:p-6">
+      <div className="flex gap-4 md:gap-6">
+        <aside className="hidden md:block w-56 shrink-0 space-y-6">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold">Calendars</h3>
+            </div>
+            <ul className="space-y-1 text-sm">
+              {calendars.map((c) => {
+                const hidden = hiddenCalendars.has(c.id);
+                return (
+                  <li key={c.id}>
+                    <button
+                      className="flex w-full items-center gap-2 text-left opacity-100 hover:opacity-80"
+                      onClick={() => {
+                        const n = new Set(hiddenCalendars);
+                        if (hidden) n.delete(c.id);
+                        else n.add(c.id);
+                        setHiddenCalendars(n);
+                      }}
+                    >
+                      <span
+                        className="inline-block h-3 w-3 rounded-sm"
+                        style={{ background: hidden ? "transparent" : c.color, border: `2px solid ${c.color}` }}
+                      />
+                      <span className={hidden ? "line-through text-zinc-400" : ""}>{c.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Nest members</h3>
+            <ul className="space-y-1 text-sm">
+              {members.map((m) => (
+                <li key={m.userId} className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 rounded-full" style={{ background: m.color }} />
+                  <span>{m.displayName}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={async () => {
+              await fetch("/api/calendar-sync", { method: "POST" });
+              mutate();
+              toast.success("Synced");
+            }}
+          >
+            Sync now
+          </Button>
+        </aside>
+
+        <div className="flex-1 min-w-0">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2">
+            <Calendar
+              localizer={localizer}
+              events={rbcEvents}
+              startAccessor="start"
+              endAccessor="end"
+              style={{ height: "75vh" }}
+              view={view}
+              onView={setView}
+              date={anchor}
+              onNavigate={setAnchor}
+              views={["month", "week", "day"]}
+              selectable
+              eventPropGetter={eventStyleGetter}
+              onSelectSlot={(slot) => {
+                if (calendars.length === 0) {
+                  toast.message("Connect a calendar first.");
+                  return;
+                }
+                setDialog({ slot: { start: slot.start as Date, end: slot.end as Date } });
+              }}
+              onSelectEvent={(ev) =>
+                setDialog({ event: (ev as RBCEvent & { resource: EventRow }).resource })
+              }
+            />
+          </div>
+          {isLoading && <div className="text-xs text-zinc-500 mt-2">Loading…</div>}
         </div>
       </div>
+
+      {dialog && (
+        <EventDialog
+          open
+          onClose={() => setDialog(null)}
+          onSaved={() => {
+            setDialog(null);
+            mutate();
+          }}
+          calendars={calendars.filter((c) =>
+            accounts.some((a) => a.id === c.accountId && a.userId) // only own-writable calendars
+          )}
+          initialEvent={dialog.event ?? null}
+          initialSlot={dialog.slot ?? null}
+        />
+      )}
     </div>
   );
+}
+
+function rangeFor(view: View, anchor: Date) {
+  const d = new Date(anchor);
+  if (view === "month") {
+    const from = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    const to = new Date(d.getFullYear(), d.getMonth() + 2, 0);
+    return { from, to };
+  }
+  if (view === "week") {
+    const day = d.getDay();
+    const from = new Date(d);
+    from.setDate(d.getDate() - day - 7);
+    const to = new Date(d);
+    to.setDate(d.getDate() - day + 14);
+    return { from, to };
+  }
+  // day
+  const from = new Date(d);
+  from.setDate(d.getDate() - 1);
+  const to = new Date(d);
+  to.setDate(d.getDate() + 2);
+  return { from, to };
 }
