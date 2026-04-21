@@ -65,6 +65,35 @@ body {
   border-color: rgb(39 39 42);
 }
 
+/* Make the hour-grid ("raster") visible in both modes. rbc's defaults are too
+   faint and the 30-min slot divider is nearly white — unreadable on mobile. */
+.rbc-timeslot-group {
+  border-bottom: 1px solid rgb(228 228 231); /* zinc-200 — hour line */
+}
+.rbc-time-slot + .rbc-time-slot {
+  border-top: 1px solid rgb(244 244 245); /* zinc-100 — half-hour line */
+}
+.rbc-time-gutter,
+.rbc-day-slot {
+  border-color: rgb(228 228 231);
+}
+.dark .rbc-timeslot-group {
+  border-bottom-color: rgb(63 63 70); /* zinc-700 — visible hour line in dark */
+}
+.dark .rbc-time-slot + .rbc-time-slot {
+  border-top-color: rgb(39 39 42); /* zinc-800 — subtle half-hour line */
+}
+.dark .rbc-time-gutter,
+.dark .rbc-day-slot {
+  border-color: rgb(63 63 70);
+}
+
+/* "Now" indicator — stays bright in both modes so it's easy to find */
+.rbc-current-time-indicator {
+  background-color: rgb(225 29 72); /* rose-600 */
+  height: 2px;
+}
+
 /* Mobile: denser toolbar, larger tappable agenda rows, capped all-day strip */
 @media (max-width: 767px) {
   .rbc-toolbar {
@@ -87,8 +116,10 @@ body {
     max-height: 96px;
     overflow-y: auto;
   }
-  .rbc-time-view .rbc-time-header-content {
-    max-height: 140px;
+  /* Minimum height per hour so the time grid reads as a proper raster on
+     phones (24 × 32 = 768px body, scrolls inside .rbc-time-content). */
+  .rbc-time-view .rbc-timeslot-group {
+    min-height: 32px;
   }
 }
 
