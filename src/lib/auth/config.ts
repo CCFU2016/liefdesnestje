@@ -44,16 +44,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async session({ session, user }) {
       session.user.id = user.id;
-      const membership = await db
-        .select({ householdId: householdMembers.householdId })
-        .from(householdMembers)
-        .where(eq(householdMembers.userId, user.id))
-        .limit(1);
-      session.user.householdId = membership[0]?.householdId ?? null;
+      // Don't 500 the whole sign-in flow if the membership lookup fails —
+      // fall back to null and let the app handle it (user gets routed to
+      // /onboarding rather than a raw server error).
+      try {
+        const membership = await db
+          .select({ householdId: householdMembers.householdId })
+          .from(householdMembers)
+          .where(eq(householdMembers.userId, user.id))
+          .limit(1);
+        session.user.householdId = membership[0]?.householdId ?? null;
+      } catch (e) {
+        console.error("[auth] session callback: household lookup failed", e);
+        session.user.householdId = null;
+      }
       return session;
     },
   },
   pages: {
     signIn: "/signin",
+  },
+  logger: {
+    error(error: Error) {
+      console.error("[auth] error:", error.message, error.stack);
+    },
+    warn(code: string) {
+      console.warn("[auth] warn:", code);
+    },
   },
 });
