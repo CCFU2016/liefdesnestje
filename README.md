@@ -42,7 +42,18 @@ See `.env.example`. Required:
    - `https://<your-railway-subdomain>.up.railway.app/api/auth/callback/google`
 4. Copy the client ID/secret into `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`.
 
-Google Calendar sync is **stubbed in v1** — the OAuth client above is only used for sign-in. Google Calendar two-way sync will be added in a later pass using the same OAuth client + additional scopes.
+### Enabling Google Calendar sync
+
+The same GCP project + OAuth client works for both sign-in and calendar — just two extra steps:
+
+1. **APIs & Services → Library** → enable **Google Calendar API**.
+2. **Credentials → your OAuth client → Authorized redirect URIs** → add:
+   - `http://localhost:3000/api/integrations/google/callback`
+   - `https://<railway-domain>/api/integrations/google/callback`
+
+Then in Settings, the **Connect Google calendar** button will run the OAuth dance with the `calendar` scope and start syncing.
+
+Webhook push notifications for Google require a **verified domain** (Google Search Console) and HTTPS. On localhost we fall back to polling every 30s — fine for dev. In production, once your Railway domain is verified, subscriptions are created automatically on reconnect.
 
 ## Microsoft Azure setup (calendar sync)
 
@@ -132,7 +143,6 @@ pnpm e2e             # Playwright (requires test DB + seeded users; see tests/e2
 
 ## What's deferred to later sprints
 
-- Google Calendar two-way sync (scaffolded — `external_calendar_accounts.provider` supports `google`, but the sync client isn't wired)
 - Trips UI + document uploads (schema and stub page present)
 - Budget and Photos pages
 - Real-time collaborative editing on notes (add Yjs if we actually collide)

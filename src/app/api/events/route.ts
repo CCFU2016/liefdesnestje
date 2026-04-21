@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
-import { createEvent } from "@/lib/microsoft/graph";
+import { createEvent as msCreateEvent } from "@/lib/microsoft/graph";
+import { createEvent as gcalCreateEvent } from "@/lib/google/api";
 
 const createSchema = z.object({
   calendarId: z.string().uuid(),
@@ -78,17 +79,38 @@ export async function POST(req: Request) {
     const endsAt = new Date(body.data.endsAt);
     const timezone = body.data.timezone ?? "UTC";
 
-    // Write through to Graph first; if that fails, don't create locally.
-    const msEvent = await createEvent(account.id, cal.externalId, {
-      subject: body.data.title,
-      body: body.data.description
-        ? { contentType: "text", content: body.data.description }
-        : undefined,
-      start: { dateTime: startsAt.toISOString().replace("Z", ""), timeZone: "UTC" },
-      end: { dateTime: endsAt.toISOString().replace("Z", ""), timeZone: "UTC" },
-      isAllDay: !!body.data.allDay,
-      location: body.data.location ? { displayName: body.data.location } : undefined,
-    });
+    // Write through to the source provider first; if that fails, don't create locally.
+    let externalId: string | null = null;
+    let etag: string | null = null;
+
+    if (account.provider === "microsoft") {
+      const msEvent = await msCreateEvent(account.id, cal.externalId, {
+        subject: body.data.title,
+        body: body.data.description
+          ? { contentType: "text", content: body.data.description }
+          : undefined,
+        start: { dateTime: startsAt.toISOString().replace("Z", ""), timeZone: "UTC" },
+        end: { dateTime: endsAt.toISOString().replace("Z", ""), timeZone: "UTC" },
+        isAllDay: !!body.data.allDay,
+        location: body.data.location ? { displayName: body.data.location } : undefined,
+      });
+      externalId = msEvent.id;
+      etag = msEvent["@odata.etag"] ?? null;
+    } else if (account.provider === "google") {
+      const gEvent = await gcalCreateEvent(account.id, cal.externalId, {
+        summary: body.data.title,
+        description: body.data.description,
+        location: body.data.location,
+        start: body.data.allDay
+          ? { date: toDateOnly(startsAt) }
+          : { dateTime: startsAt.toISOString() },
+        end: body.data.allDay
+          ? { date: toDateOnly(endsAt) }
+          : { dateTime: endsAt.toISOString() },
+      });
+      externalId = gEvent.id;
+      etag = gEvent.etag ?? null;
+    }
 
     const [local] = await db
       .insert(events)
@@ -104,8 +126,8 @@ export async function POST(req: Request) {
         location: body.data.location,
         timezone,
         visibility: body.data.visibility ?? "shared",
-        externalId: msEvent.id,
-        etag: msEvent["@odata.etag"] ?? null,
+        externalId,
+        etag,
       })
       .returning();
 
@@ -117,4 +139,8 @@ export async function POST(req: Request) {
     console.error("create event failed", e);
     return NextResponse.json({ error: "Could not save to your calendar. Try again." }, { status: 500 });
   }
+}
+
+function toDateOnly(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }

@@ -53,6 +53,10 @@ export function SettingsClient({
     window.location.href = "/api/integrations/microsoft/start";
   };
 
+  const connectGoogle = () => {
+    window.location.href = "/api/integrations/google/start";
+  };
+
   return (
     <div className="mx-auto max-w-2xl p-6 md:p-10 space-y-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -129,16 +133,16 @@ export function SettingsClient({
               ))}
             </ul>
           )}
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-wrap gap-2 pt-2">
             <Button onClick={connectMicrosoft} variant="secondary">
               Connect Microsoft calendar
             </Button>
-            <Button variant="outline" disabled title="Coming soon">
+            <Button onClick={connectGoogle} variant="secondary">
               Connect Google calendar
             </Button>
           </div>
           <p className="text-xs text-zinc-500">
-            We'll sync your Microsoft 365 calendar both ways. Your partner's calendar (once connected) shows alongside yours.
+            We sync your calendars both ways. Your partner's calendar (once connected) shows alongside yours.
           </p>
         </CardContent>
       </Card>

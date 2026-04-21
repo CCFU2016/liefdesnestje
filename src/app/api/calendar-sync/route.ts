@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
-import { syncCalendarEvents } from "@/lib/microsoft/sync";
+import { syncCalendarEvents as msSyncCalendarEvents } from "@/lib/microsoft/sync";
+import { syncCalendarEvents as gcalSyncCalendarEvents } from "@/lib/google/sync";
 
 /**
  * Pulls a delta sync for all of the caller's enabled calendars. Safe to
@@ -20,19 +21,14 @@ export async function POST() {
     let totalUpserted = 0;
     let totalRemoved = 0;
     for (const a of accounts) {
-      if (a.provider !== "microsoft") continue; // Google: v1 stub
       const cals = await db
         .select()
         .from(calendars)
         .where(and(eq(calendars.accountId, a.id), eq(calendars.syncEnabled, true)));
       for (const c of cals) {
         try {
-          const { upserted, removed } = await syncCalendarEvents(
-            a.id,
-            c.id,
-            ctx.householdId,
-            ctx.userId
-          );
+          const syncFn = a.provider === "microsoft" ? msSyncCalendarEvents : gcalSyncCalendarEvents;
+          const { upserted, removed } = await syncFn(a.id, c.id, ctx.householdId, ctx.userId);
           totalUpserted += upserted;
           totalRemoved += removed;
         } catch (e) {

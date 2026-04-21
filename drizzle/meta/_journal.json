@@ -8,6 +8,13 @@
       "when": 1776766079243,
       "tag": "0000_ancient_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776768343378,
+      "tag": "0001_shocking_northstar",
+      "breakpoints": true
     }
   ]
 }

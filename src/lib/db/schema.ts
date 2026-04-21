@@ -151,7 +151,8 @@ export const calendars = pgTable(
     syncEnabled: boolean("sync_enabled").notNull().default(true),
     deltaLink: text("delta_link"), // Microsoft Graph delta token
     syncToken: text("sync_token"), // Google Calendar sync token
-    subscriptionId: text("subscription_id"), // webhook subscription id
+    subscriptionId: text("subscription_id"), // webhook subscription / channel id
+    subscriptionResourceId: text("subscription_resource_id"), // Google: needed to stop a channel
     subscriptionExpiresAt: timestamp("subscription_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

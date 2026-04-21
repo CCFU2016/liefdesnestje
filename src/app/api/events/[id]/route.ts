@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
-import { deleteEvent, updateEvent } from "@/lib/microsoft/graph";
+import { deleteEvent as msDeleteEvent, updateEvent as msUpdateEvent } from "@/lib/microsoft/graph";
+import { deleteEvent as gcalDeleteEvent, updateEvent as gcalUpdateEvent } from "@/lib/google/api";
 
 const patchSchema = z.object({
   title: z.string().min(1).max(300).optional(),
@@ -38,7 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const ev = await loadEventForCaller(id, ctx);
     if (!ev) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // If it has an external source, call Graph first.
+    // If it has an external source, write-through to that provider first.
     if (ev.calendarId && ev.externalId) {
       const cal = (await db.select().from(calendars).where(eq(calendars.id, ev.calendarId)).limit(1))[0];
       if (cal) {
@@ -48,27 +49,60 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (account && account.userId === ctx.userId) {
           const startsAt = body.data.startsAt ? new Date(body.data.startsAt) : ev.startsAt;
           const endsAt = body.data.endsAt ? new Date(body.data.endsAt) : ev.endsAt;
-          const result = await updateEvent(
-            account.id,
-            ev.externalId,
-            {
-              ...(body.data.title !== undefined ? { subject: body.data.title } : {}),
-              ...(body.data.description !== undefined
-                ? { body: { contentType: "text", content: body.data.description ?? "" } }
-                : {}),
-              ...(body.data.startsAt
-                ? { start: { dateTime: startsAt.toISOString().replace("Z", ""), timeZone: "UTC" } }
-                : {}),
-              ...(body.data.endsAt
-                ? { end: { dateTime: endsAt.toISOString().replace("Z", ""), timeZone: "UTC" } }
-                : {}),
-              ...(body.data.allDay !== undefined ? { isAllDay: body.data.allDay } : {}),
-              ...(body.data.location !== undefined
-                ? { location: { displayName: body.data.location ?? "" } }
-                : {}),
-            },
-            ev.etag ?? null
-          );
+          let newEtag: string | null = ev.etag;
+
+          if (account.provider === "microsoft") {
+            const result = await msUpdateEvent(
+              account.id,
+              ev.externalId,
+              {
+                ...(body.data.title !== undefined ? { subject: body.data.title } : {}),
+                ...(body.data.description !== undefined
+                  ? { body: { contentType: "text", content: body.data.description ?? "" } }
+                  : {}),
+                ...(body.data.startsAt
+                  ? { start: { dateTime: startsAt.toISOString().replace("Z", ""), timeZone: "UTC" } }
+                  : {}),
+                ...(body.data.endsAt
+                  ? { end: { dateTime: endsAt.toISOString().replace("Z", ""), timeZone: "UTC" } }
+                  : {}),
+                ...(body.data.allDay !== undefined ? { isAllDay: body.data.allDay } : {}),
+                ...(body.data.location !== undefined
+                  ? { location: { displayName: body.data.location ?? "" } }
+                  : {}),
+              },
+              ev.etag ?? null
+            );
+            newEtag = result["@odata.etag"] ?? ev.etag;
+          } else if (account.provider === "google") {
+            const allDay = body.data.allDay ?? ev.allDay;
+            const result = await gcalUpdateEvent(
+              account.id,
+              cal.externalId,
+              ev.externalId,
+              {
+                ...(body.data.title !== undefined ? { summary: body.data.title } : {}),
+                ...(body.data.description !== undefined ? { description: body.data.description ?? "" } : {}),
+                ...(body.data.startsAt
+                  ? {
+                      start: allDay
+                        ? { date: startsAt.toISOString().slice(0, 10) }
+                        : { dateTime: startsAt.toISOString() },
+                    }
+                  : {}),
+                ...(body.data.endsAt
+                  ? {
+                      end: allDay
+                        ? { date: endsAt.toISOString().slice(0, 10) }
+                        : { dateTime: endsAt.toISOString() },
+                    }
+                  : {}),
+                ...(body.data.location !== undefined ? { location: body.data.location ?? "" } : {}),
+              },
+              ev.etag ?? null
+            );
+            newEtag = result.etag ?? ev.etag;
+          }
 
           const [local] = await db
             .update(events)
@@ -80,7 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               allDay: body.data.allDay ?? ev.allDay,
               location: body.data.location !== undefined ? body.data.location : ev.location,
               visibility: body.data.visibility ?? ev.visibility,
-              etag: result["@odata.etag"] ?? ev.etag,
+              etag: newEtag,
               updatedAt: new Date(),
             })
             .where(eq(events.id, id))
@@ -130,9 +164,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
           await db.select().from(externalCalendarAccounts).where(eq(externalCalendarAccounts.id, cal.accountId)).limit(1)
         )[0];
         if (account && account.userId === ctx.userId) {
-          await deleteEvent(account.id, ev.externalId).catch((e) => {
+          try {
+            if (account.provider === "microsoft") {
+              await msDeleteEvent(account.id, ev.externalId);
+            } else if (account.provider === "google") {
+              await gcalDeleteEvent(account.id, cal.externalId, ev.externalId);
+            }
+          } catch (e) {
             console.warn("remote delete failed, continuing to local delete", e);
-          });
+          }
         }
       }
     }

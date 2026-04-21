@@ -1,0 +1,1 @@
+ALTER TABLE "calendars" ADD COLUMN "subscription_resource_id" text;

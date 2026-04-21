@@ -115,12 +115,19 @@ export function CalendarShell({
         <Card className="p-6">
           <h2 className="text-lg font-semibold mb-2">Connect a calendar</h2>
           <p className="text-sm text-zinc-500 mb-4">
-            Link your Microsoft 365 calendar to see your events here and have Liefdesnestje sync both ways.
+            Link a calendar to see your events here. Liefdesnestje syncs both ways.
           </p>
-          <Button onClick={() => (window.location.href = "/api/integrations/microsoft/start")}>
-            Connect Microsoft calendar
-          </Button>
-          <p className="text-xs text-zinc-500 mt-3">Google Calendar sync is coming soon.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => (window.location.href = "/api/integrations/microsoft/start")}>
+              Connect Microsoft calendar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => (window.location.href = "/api/integrations/google/start")}
+            >
+              Connect Google calendar
+            </Button>
+          </div>
         </Card>
       </div>
     );
