@@ -29,21 +29,26 @@ export async function GET(req: Request) {
     const fromDate = new Date(from);
     const toDate = new Date(to);
 
+    // Include app-native events (no calendar) and events from sync-enabled
+    // calendars only — so toggling a calendar off in Settings immediately hides
+    // its events without deleting them.
     const rows = await db
-      .select()
+      .select({ event: events })
       .from(events)
+      .leftJoin(calendars, eq(events.calendarId, calendars.id))
       .where(
         and(
           eq(events.householdId, ctx.householdId),
           isNull(events.deletedAt),
           gte(events.endsAt, fromDate),
           lte(events.startsAt, toDate),
-          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId))
+          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId)),
+          or(isNull(events.calendarId), eq(calendars.syncEnabled, true))
         )
       )
       .orderBy(events.startsAt);
 
-    return NextResponse.json({ events: rows });
+    return NextResponse.json({ events: rows.map((r) => r.event) });
   } catch (e) {
     if (e instanceof UnauthorizedError) {
       return NextResponse.json({ error: e.message }, { status: e.status });

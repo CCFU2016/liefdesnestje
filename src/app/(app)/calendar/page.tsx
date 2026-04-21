@@ -1,7 +1,7 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { CalendarShell } from "@/components/calendar/calendar-shell";
 
 export default async function CalendarPage() {
@@ -19,7 +19,15 @@ export default async function CalendarPage() {
     : [];
 
   const linkedCalendars = accounts.length
-    ? await db.select().from(calendars).where(inArray(calendars.accountId, accounts.map((a) => a.id)))
+    ? await db
+        .select()
+        .from(calendars)
+        .where(
+          and(
+            inArray(calendars.accountId, accounts.map((a) => a.id)),
+            eq(calendars.syncEnabled, true)
+          )
+        )
     : [];
 
   return (
