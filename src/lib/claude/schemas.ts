@@ -55,3 +55,15 @@ export const AggregatedListSchema = z.object({
 
 export type AggregatedIngredient = z.infer<typeof AggregatedIngredientSchema>;
 export type AggregatedList = z.infer<typeof AggregatedListSchema>;
+
+// Estimated nutrition — same shape as ExtractedNutrition but non-nullable
+// numbers (we want a best-guess for every field).
+export const EstimatedNutritionSchema = z.object({
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fat: z.number(),
+  fiber: z.number(),
+});
+
+export type EstimatedNutrition = z.infer<typeof EstimatedNutritionSchema>;

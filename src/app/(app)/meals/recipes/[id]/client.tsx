@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChefHat, Edit, ExternalLink, Star, Trash2 } from "lucide-react";
+import { ChefHat, Edit, ExternalLink, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -66,6 +66,24 @@ export function RecipeDetailClient({
     } catch {
       setRecipe({ ...recipe, score: prev });
       toast.error("Couldn't save the score.");
+    }
+  };
+
+  const [estimatingNutrition, setEstimatingNutrition] = useState(false);
+  const estimateMacros = async () => {
+    setEstimatingNutrition(true);
+    try {
+      const res = await fetch(`/api/recipes/${recipe.id}/estimate-nutrition`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Estimate failed");
+      const { nutrition } = await res.json();
+      setRecipe({ ...recipe, nutritionPerServing: nutrition });
+      toast.success("Macros estimated.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Estimate failed");
+    } finally {
+      setEstimatingNutrition(false);
     }
   };
 
@@ -217,8 +235,24 @@ export function RecipeDetailClient({
       </div>
 
       <Card className="mt-6">
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between">
           <CardTitle>Nutrition (per serving)</CardTitle>
+          {canEdit && recipe.ingredients.length > 0 && (
+            <Button
+              size="sm"
+              variant={recipe.nutritionPerServing ? "ghost" : "secondary"}
+              onClick={estimateMacros}
+              disabled={estimatingNutrition}
+              className="gap-1.5"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {estimatingNutrition
+                ? "Estimating…"
+                : recipe.nutritionPerServing
+                  ? "Re-estimate"
+                  : "Estimate from ingredients"}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-5 gap-2 text-xs">
@@ -246,7 +280,11 @@ export function RecipeDetailClient({
           </div>
           {!recipe.nutritionPerServing && canEdit && (
             <p className="text-[11px] text-zinc-500 mt-3 text-center">
-              No macros yet — <Link href={`/meals/recipes/${recipe.id}/edit`} className="underline">fill them in</Link>.
+              Tap <em>Estimate from ingredients</em> above, or{" "}
+              <Link href={`/meals/recipes/${recipe.id}/edit`} className="underline">
+                fill them in manually
+              </Link>
+              .
             </p>
           )}
         </CardContent>

@@ -21,6 +21,16 @@ Rules:
 - When found=false, keep "reason" brief (one short sentence) and set "recipe" to null.
 - When found=true, populate "recipe" fully per the schema.`;
 
+export const NUTRITION_ESTIMATION_SYSTEM_PROMPT = `You estimate per-serving nutrition values from a recipe's ingredient list.
+
+Rules:
+- Output per-serving values (total recipe ÷ serving count).
+- Be a reasonable cook: round to sensible numbers (e.g., 412 kcal, not 411.73).
+- When a quantity is vague ("a pinch", "to taste"), estimate a reasonable amount.
+- When a unit is unknown or ambiguous, assume standard US-metric (1 tbsp ≈ 15g oil, 1 cup flour ≈ 120g, etc.).
+- Values are numbers only — no units, no ranges. Fiber in grams. Calories in kcal.
+- Don't refuse to estimate; provide your best guess even with incomplete info.`;
+
 export const INGREDIENT_AGGREGATION_SYSTEM_PROMPT = `You combine ingredient lists from multiple recipes into a single shopping list.
 
 Rules:

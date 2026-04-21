@@ -24,13 +24,25 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
   if (!cal.householdId) throw new Error("ICS calendar missing householdId");
 
   try {
+    // Use a browser-like UA — some ICS hosts (e.g., Outlook.com published
+    // feeds, private Google CalDAV endpoints) reject unknown user-agents
+    // with a 403 / 500.
     const headers: Record<string, string> = {
-      "User-Agent": "Liefdesnestje/1.0 (+https://github.com/CCFU2016/liefdesnestje)",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
       Accept: "text/calendar, text/plain, */*",
     };
     if (cal.icsEtag) headers["If-None-Match"] = cal.icsEtag;
 
-    const res = await fetch(cal.icsUrl, { headers, redirect: "follow" });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    let res: Response;
+    try {
+      res = await fetch(cal.icsUrl, { headers, redirect: "follow", signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+
     if (res.status === 304) {
       // unchanged
       await db
@@ -39,7 +51,13 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
         .where(eq(calendars.id, calendarId));
       return { upserted: 0, removed: 0 };
     }
-    if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const firstLine = body.split(/\r?\n/, 1)[0]?.slice(0, 120) ?? "";
+      throw new Error(
+        `The feed returned ${res.status} ${res.statusText || ""}${firstLine ? ` — ${firstLine}` : ""}`.trim()
+      );
+    }
 
     const etag = res.headers.get("etag");
     const text = await res.text();

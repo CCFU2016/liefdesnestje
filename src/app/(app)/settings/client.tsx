@@ -796,8 +796,36 @@ function CalendarRow({
               </span>
             </div>
             {cal.lastError && (
-              <div className="text-[11px] text-red-500 truncate" title={cal.lastError}>
-                ⚠ {cal.lastError}
+              <div className="text-[11px] text-red-500 flex items-center gap-1.5">
+                <span className="truncate" title={cal.lastError}>
+                  ⚠ {cal.lastError}
+                </span>
+                {cal.provider === "ics" && (
+                  <button
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const res = await fetch(`/api/ics-calendars/${cal.id}/refresh`, {
+                          method: "POST",
+                        });
+                        if (!res.ok) {
+                          const body = await res.json().catch(() => ({}));
+                          throw new Error(body.error ?? `Refresh failed (${res.status})`);
+                        }
+                        toast.success("Refreshed");
+                        onChanged();
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Refresh failed");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    disabled={busy}
+                    className="underline shrink-0 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-50"
+                  >
+                    retry
+                  </button>
+                )}
               </div>
             )}
           </div>

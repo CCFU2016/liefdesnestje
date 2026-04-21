@@ -199,13 +199,42 @@ function ImageUploader({
   onExtract: (f: File) => void;
   onCancel: () => void;
 }) {
+  const [dragActive, setDragActive] = useState(false);
+  const inputId = "recipe-photo-upload";
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Upload a photo</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <label
+          htmlFor={inputId}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragActive(false);
+            const f = e.dataTransfer.files?.[0];
+            if (f) onExtract(f);
+          }}
+          className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 cursor-pointer transition-colors ${
+            dragActive
+              ? "border-zinc-900 dark:border-zinc-50 bg-zinc-50 dark:bg-zinc-900"
+              : "border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600"
+          } ${loading ? "pointer-events-none opacity-60" : ""}`}
+        >
+          <ImageIcon className="h-8 w-8 text-zinc-400" />
+          <div className="text-sm font-medium">
+            {loading ? "Reading the recipe…" : "Tap to choose a photo"}
+          </div>
+          <div className="text-xs text-zinc-500">or drag & drop · JPEG, PNG, WebP · max 10MB</div>
+        </label>
         <input
+          id={inputId}
           type="file"
           accept="image/*"
           disabled={loading}
@@ -213,13 +242,15 @@ function ImageUploader({
             const f = e.target.files?.[0];
             if (f) onExtract(f);
           }}
-          className="block w-full text-sm"
+          className="sr-only"
         />
         <p className="text-xs text-zinc-500">
-          Clear, straight-on shots of a single page work best. Max 10MB.
+          Clear, straight-on shots of a single page work best. You can add a separate
+          photo of the finished dish from the edit screen after extraction.
         </p>
-        {loading && <p className="text-sm text-zinc-500">Reading the recipe…</p>}
-        <Button variant="ghost" size="sm" onClick={onCancel} disabled={loading}>Cancel</Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
+          Cancel
+        </Button>
       </CardContent>
     </Card>
   );

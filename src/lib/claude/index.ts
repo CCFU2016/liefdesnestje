@@ -3,14 +3,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import {
   AggregatedListSchema,
+  EstimatedNutritionSchema,
   ExtractedRecipeSchema,
   SocialExtractionSchema,
   type AggregatedList,
+  type EstimatedNutrition,
   type ExtractedRecipe,
   type SocialExtraction,
 } from "./schemas";
 import {
   INGREDIENT_AGGREGATION_SYSTEM_PROMPT,
+  NUTRITION_ESTIMATION_SYSTEM_PROMPT,
   RECIPE_SYSTEM_PROMPT,
   SOCIAL_CAPTION_SYSTEM_PROMPT,
 } from "./prompts";
@@ -248,5 +251,69 @@ export async function aggregateIngredients(
   }
 }
 
+// --- estimateNutrition ---
+
+export async function estimateNutrition(input: {
+  recipeTitle: string;
+  servings: number;
+  ingredients: Array<{
+    quantity: string | null;
+    unit: string | null;
+    name: string;
+    notes?: string | null;
+  }>;
+  userId: string;
+}): Promise<EstimatedNutrition> {
+  await assertWithinDailyCap(input.userId);
+  const started = Date.now();
+  const payload = JSON.stringify({
+    title: input.recipeTitle,
+    servings: input.servings,
+    ingredients: input.ingredients,
+  });
+  const inputBytes = Buffer.byteLength(payload, "utf8");
+
+  try {
+    const resp = await client().messages.parse({
+      model: MODEL,
+      max_tokens: 500,
+      system: NUTRITION_ESTIMATION_SYSTEM_PROMPT,
+      output_config: { format: zodOutputFormat(EstimatedNutritionSchema) },
+      messages: [
+        {
+          role: "user",
+          content: `Estimate per-serving macros for this recipe:\n\n${payload}`,
+        },
+      ],
+    });
+    if (!resp.parsed_output) throw new Error("Claude returned no parsed output");
+    await recordUsage({
+      userId: input.userId,
+      callType: "aggregate",
+      success: true,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: JSON.stringify(resp.parsed_output).length,
+      latencyMs: Date.now() - started,
+    });
+    return resp.parsed_output;
+  } catch (e) {
+    await recordUsage({
+      userId: input.userId,
+      callType: "aggregate",
+      success: false,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: 0,
+      latencyMs: Date.now() - started,
+    });
+    throw e;
+  }
+}
+
 export { ExtractionBudgetError } from "./rate-limit";
-export type { ExtractedRecipe, SocialExtraction, AggregatedList, AggregatedIngredient } from "./schemas";
+export type {
+  ExtractedRecipe,
+  SocialExtraction,
+  AggregatedList,
+  AggregatedIngredient,
+  EstimatedNutrition,
+} from "./schemas";

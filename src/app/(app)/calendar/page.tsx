@@ -34,6 +34,7 @@ export default async function CalendarPage() {
 
   return (
     <CalendarShell
+      currentUserId={ctx.userId}
       members={members}
       accounts={accounts.map((a) => ({
         id: a.id,

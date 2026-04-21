@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Star, Trash2 } from "lucide-react";
+import { ImageUp, Plus, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -185,12 +185,44 @@ export function RecipeForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Image URL (optional)</Label>
-            <Input
-              value={value.imageUrl ?? ""}
-              onChange={(e) => setValue({ ...value, imageUrl: e.target.value || null })}
-              placeholder="https://…"
-            />
+            <Label>Photo of the finished dish</Label>
+            <div className="flex items-start gap-3">
+              {value.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={value.imageUrl}
+                  alt=""
+                  className="h-20 w-20 rounded-md object-cover shrink-0"
+                />
+              ) : (
+                <div className="h-20 w-20 rounded-md bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-400 text-xs">
+                  none yet
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <FoodPhotoPicker
+                  onUploaded={(url) => setValue({ ...value, imageUrl: url })}
+                />
+                <Input
+                  value={value.imageUrl ?? ""}
+                  onChange={(e) => setValue({ ...value, imageUrl: e.target.value || null })}
+                  placeholder="…or paste an image URL"
+                  className="text-xs"
+                />
+                {value.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setValue({ ...value, imageUrl: null })}
+                    className="text-xs text-zinc-500 underline"
+                  >
+                    remove photo
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              Useful when the recipe and the finished dish are on different cookbook pages.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -429,5 +461,56 @@ export function RecipeForm({
         </Button>
       </div>
     </div>
+  );
+}
+
+function FoodPhotoPicker({ onUploaded }: { onUploaded: (url: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const inputId = "recipe-food-photo-upload";
+
+  const handle = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024) {
+      toast.error("Image too large (max 10MB).");
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/recipes/image", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Upload failed");
+      const { imageUrl } = await res.json();
+      onUploaded(imageUrl);
+      toast.success("Photo uploaded.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <>
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => handle(e.target.files?.[0])}
+        disabled={uploading}
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className="gap-1.5"
+        onClick={() => document.getElementById(inputId)?.click()}
+        disabled={uploading}
+      >
+        <ImageUp className="h-3.5 w-3.5" />
+        {uploading ? "Uploading…" : "Upload photo"}
+      </Button>
+    </>
   );
 }

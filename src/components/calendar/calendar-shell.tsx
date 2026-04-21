@@ -78,10 +78,12 @@ const formats = {
 };
 
 export function CalendarShell({
+  currentUserId,
   members,
   accounts,
   calendars,
 }: {
+  currentUserId: string;
   members: { userId: string; displayName: string; color: string }[];
   accounts: AccountVM[];
   calendars: CalendarVM[];
@@ -93,6 +95,10 @@ export function CalendarShell({
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // Prefs key scoped to the user so Niki and Laura don't overwrite each
+  // other's calendar visibility choices on a shared laptop.
+  const prefsKey = `lnest:cal:v1:${currentUserId}`;
 
   // view state uses names valid in BOTH configs ('week' exists on mobile too,
   // just points at ThreeDayView there — avoids SSR/hydration mismatch).
@@ -119,6 +125,40 @@ export function CalendarShell({
   }).current();
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
+
+  // Hydrate prefs from localStorage after mount. (SSR has no localStorage,
+  // so we load in an effect and let React re-render.)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(prefsKey);
+      if (!raw) return;
+      const prefs = JSON.parse(raw) as { view?: View; hiddenCalendars?: string[] };
+      if (prefs.view) setView(prefs.view);
+      if (prefs.hiddenCalendars) setHiddenCalendars(new Set(prefs.hiddenCalendars));
+    } catch {
+      // corrupt prefs — ignore
+    }
+
+  }, [prefsKey]);
+
+  // Persist on every change (after the initial hydration render).
+  const prefsMounted = useRef(false);
+  useEffect(() => {
+    if (!prefsMounted.current) {
+      prefsMounted.current = true;
+      return;
+    }
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(
+        prefsKey,
+        JSON.stringify({ view, hiddenCalendars: Array.from(hiddenCalendars) })
+      );
+    } catch {
+      // quota / private browsing — skip
+    }
+  }, [view, hiddenCalendars, prefsKey]);
   const [dialog, setDialog] = useState<{
     event?: EventRow;
     slot?: { start: Date; end: Date };
@@ -326,20 +366,6 @@ export function CalendarShell({
                     </button>
                   );
                 })}
-                {members.length > 0 && (
-                  <>
-                    <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                    {members.map((m) => (
-                      <div key={m.userId} className="flex items-center gap-1.5">
-                        <span
-                          className="inline-block h-3 w-3 rounded-full"
-                          style={{ background: m.color }}
-                        />
-                        <span>{m.displayName}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
               </div>
             </div>
           )}

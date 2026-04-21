@@ -18,7 +18,7 @@ const patchSchema = z.object({
   forPersons: z.array(z.string().uuid()).optional(),
   categoryId: z.string().uuid().nullable().optional(),
   pushToCalendar: z.boolean().optional(),
-  pushProvider: z.enum(["google", "microsoft"]).optional(),
+  pushProvider: z.enum(["google", "microsoft"]).nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
 });
 
