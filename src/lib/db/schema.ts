@@ -20,7 +20,6 @@ import { relations, sql } from "drizzle-orm";
 export const visibilityEnum = pgEnum("visibility", ["private", "shared"]);
 export const householdRoleEnum = pgEnum("household_role", ["owner", "member"]);
 export const calendarProviderEnum = pgEnum("calendar_provider", ["google", "microsoft"]);
-export const tripItemTypeEnum = pgEnum("trip_item_type", ["flight", "hotel", "activity", "document"]);
 
 // --- Auth.js core tables (matches @auth/drizzle-adapter expectations) ---
 
@@ -240,6 +239,7 @@ export const todos = pgTable(
     }),
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     sortOrder: integer("sort_order").notNull().default(0),
+    source: text("source"), // 'meal-plan' | null — tag so we can filter later
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -278,10 +278,10 @@ export const notes = pgTable(
   ]
 );
 
-// --- Trips (schema only in v1, pages stubbed) ---
+// --- Holidays (v2 — replaces the v1 trips stub) ---
 
-export const trips = pgTable(
-  "trips",
+export const holidays = pgTable(
+  "holidays",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     householdId: uuid("household_id")
@@ -291,35 +291,116 @@ export const trips = pgTable(
       .notNull()
       .references(() => users.id),
     title: text("title").notNull(),
-    destination: text("destination"),
-    startsAt: timestamp("starts_at", { withTimezone: true }),
-    endsAt: timestamp("ends_at", { withTimezone: true }),
-    coverImageUrl: text("cover_image_url"),
+    description: text("description"),
+    startsOn: text("starts_on").notNull(), // date-only, stored as YYYY-MM-DD
+    endsOn: text("ends_on"), // nullable for single-day
+    forPersons: uuid("for_persons").array().notNull().default(sql`'{}'::uuid[]`),
+    documentUrl: text("document_url"),
+    pushToCalendar: boolean("push_to_calendar").notNull().default(false),
+    externalCalendarEventId: text("external_calendar_event_id"),
+    externalCalendarProvider: calendarProviderEnum("external_calendar_provider"),
+    externalCalendarId: uuid("external_calendar_id").references(() => calendars.id, {
+      onDelete: "set null",
+    }),
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (t) => [index("trips_household_idx").on(t.householdId)]
+  (t) => [index("holidays_household_idx").on(t.householdId), index("holidays_starts_idx").on(t.startsOn)]
 );
 
-export const tripItems = pgTable(
-  "trip_items",
+// --- Recipes + meal planning (v2) ---
+
+export const recipes = pgTable(
+  "recipes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tripId: uuid("trip_id")
+    householdId: uuid("household_id")
       .notNull()
-      .references(() => trips.id, { onDelete: "cascade" }),
-    type: tripItemTypeEnum("type").notNull(),
+      .references(() => households.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
     title: text("title").notNull(),
-    startsAt: timestamp("starts_at", { withTimezone: true }),
-    endsAt: timestamp("ends_at", { withTimezone: true }),
-    details: jsonb("details").notNull().default({}),
-    attachmentUrl: text("attachment_url"),
-    sortOrder: integer("sort_order").notNull().default(0),
+    description: text("description"),
+    servings: integer("servings").notNull().default(2),
+    prepTimeMinutes: integer("prep_time_minutes"),
+    cookTimeMinutes: integer("cook_time_minutes"),
+    ingredients: jsonb("ingredients").notNull().default([]), // {quantity, unit, name, notes}[]
+    instructions: jsonb("instructions").notNull().default([]), // string[]
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    nutritionPerServing: jsonb("nutrition_per_serving"), // {calories, protein, carbs, fat, fiber}
+    sourceUrl: text("source_url"),
+    imageUrl: text("image_url"),
+    cookedCount: integer("cooked_count").notNull().default(0),
+    visibility: visibilityEnum("visibility").notNull().default("shared"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("recipes_household_idx").on(t.householdId),
+    index("recipes_title_idx").on(t.title),
+  ]
+);
+
+export const recipeFavorites = pgTable(
+  "recipe_favorites",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recipeId: uuid("recipe_id")
+      .notNull()
+      .references(() => recipes.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("trip_items_trip_idx").on(t.tripId)]
+  (t) => [primaryKey({ columns: [t.userId, t.recipeId] })]
+);
+
+export const mealPlanEntries = pgTable(
+  "meal_plan_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    date: text("date").notNull(), // YYYY-MM-DD, dinner-only so no slot enum needed
+    recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "set null" }),
+    freeText: text("free_text"), // for quick-add meals without a saved recipe
+    servings: integer("servings"), // null = use recipe.servings
+    cookedAt: timestamp("cooked_at", { withTimezone: true }),
+    visibility: visibilityEnum("visibility").notNull().default("shared"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("meal_plan_household_idx").on(t.householdId),
+    index("meal_plan_date_idx").on(t.date),
+  ]
+);
+
+export const claudeUsage = pgTable(
+  "claude_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD (user's day, for daily cap)
+    callType: text("call_type").notNull(), // 'extract-text' | 'extract-image' | 'extract-social' | 'aggregate'
+    success: boolean("success").notNull(),
+    inputSizeBytes: integer("input_size_bytes"),
+    outputSizeBytes: integer("output_size_bytes"),
+    latencyMs: integer("latency_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("claude_usage_user_day_idx").on(t.userId, t.date)]
 );
 
 // --- Notifications (in-app) ---
@@ -351,7 +432,9 @@ export const householdsRelations = relations(households, ({ many }) => ({
   events: many(events),
   todoLists: many(todoLists),
   notes: many(notes),
-  trips: many(trips),
+  holidays: many(holidays),
+  recipes: many(recipes),
+  mealPlanEntries: many(mealPlanEntries),
   invites: many(householdInvites),
 }));
 
@@ -390,14 +473,26 @@ export const notesRelations = relations(notes, ({ one }) => ({
   author: one(users, { fields: [notes.authorId], references: [users.id] }),
 }));
 
-export const tripsRelations = relations(trips, ({ one, many }) => ({
-  household: one(households, { fields: [trips.householdId], references: [households.id] }),
-  author: one(users, { fields: [trips.authorId], references: [users.id] }),
-  items: many(tripItems),
+export const holidaysRelations = relations(holidays, ({ one }) => ({
+  household: one(households, { fields: [holidays.householdId], references: [households.id] }),
+  author: one(users, { fields: [holidays.authorId], references: [users.id] }),
 }));
 
-export const tripItemsRelations = relations(tripItems, ({ one }) => ({
-  trip: one(trips, { fields: [tripItems.tripId], references: [trips.id] }),
+export const recipesRelations = relations(recipes, ({ one, many }) => ({
+  household: one(households, { fields: [recipes.householdId], references: [households.id] }),
+  author: one(users, { fields: [recipes.authorId], references: [users.id] }),
+  favorites: many(recipeFavorites),
+}));
+
+export const recipeFavoritesRelations = relations(recipeFavorites, ({ one }) => ({
+  user: one(users, { fields: [recipeFavorites.userId], references: [users.id] }),
+  recipe: one(recipes, { fields: [recipeFavorites.recipeId], references: [recipes.id] }),
+}));
+
+export const mealPlanEntriesRelations = relations(mealPlanEntries, ({ one }) => ({
+  household: one(households, { fields: [mealPlanEntries.householdId], references: [households.id] }),
+  author: one(users, { fields: [mealPlanEntries.authorId], references: [users.id] }),
+  recipe: one(recipes, { fields: [mealPlanEntries.recipeId], references: [recipes.id] }),
 }));
 
 // Type exports
@@ -410,6 +505,9 @@ export type Event = typeof events.$inferSelect;
 export type TodoList = typeof todoLists.$inferSelect;
 export type Todo = typeof todos.$inferSelect;
 export type Note = typeof notes.$inferSelect;
-export type Trip = typeof trips.$inferSelect;
-export type TripItem = typeof tripItems.$inferSelect;
+export type Holiday = typeof holidays.$inferSelect;
+export type Recipe = typeof recipes.$inferSelect;
+export type RecipeFavorite = typeof recipeFavorites.$inferSelect;
+export type MealPlanEntry = typeof mealPlanEntries.$inferSelect;
+export type ClaudeUsage = typeof claudeUsage.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;

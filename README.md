@@ -2,7 +2,7 @@
 
 Shared home hub for you and your partner — calendar, to-dos, notes, trips, all in one place.
 
-- **Stack:** Next.js 16 (App Router) + TypeScript + Tailwind v4 + shadcn-style primitives + Drizzle ORM + Postgres + Auth.js v5 (Google) + Microsoft Graph (calendar) + Tiptap (notes) + react-big-calendar + SWR polling for real-time
+- **Stack:** Next.js 16 (App Router) + TypeScript + Tailwind v4 + shadcn-style primitives + Drizzle ORM + Postgres + Auth.js v5 (Google) + Microsoft Graph (calendar) + Tiptap (notes) + react-big-calendar + Claude API (recipe extraction + ingredient aggregation) + SWR polling for real-time
 - **Package manager:** pnpm
 - **Deploy target:** Railway (single Next.js service + Railway Postgres + optional Volume for uploads)
 
@@ -31,6 +31,7 @@ See `.env.example`. Required:
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` / `MS_TENANT_ID` | Microsoft Graph calendar | Azure Portal → App registrations |
 | `ENCRYPTION_KEY` | AES-256-GCM key for OAuth tokens at rest | `openssl rand -hex 32` (32 bytes / 64 hex chars) |
 | `WEBHOOK_SECRET` | Shared secret used in Graph subscription clientState | `openssl rand -hex 32` |
+| `ANTHROPIC_API_KEY` | Claude API (recipe extraction + aggregation, v2) | console.anthropic.com → API keys |
 | `NEXT_PUBLIC_APP_URL` | Base URL | `http://localhost:3000` locally |
 
 ## Google Cloud Console setup (sign-in)
@@ -143,6 +144,14 @@ pnpm e2e             # Playwright (requires test DB + seeded users; see tests/e2
 | `pnpm e2e` | Playwright |
 | `pnpm cron:renew-subscriptions` | Refresh Graph/Google webhook subscriptions |
 | `pnpm cron:refresh-ics` | Re-pull all ICS subscriptions (runs every 6h in prod) |
+
+## v2 features
+
+- **Meals** — shared weekly meal plan (dinner only), recipe book with 4 extraction sources (manual, photo, URL, TikTok/Instagram), cook mode with Wake Lock, and a Claude-powered "Generate shopping list" button that aggregates ingredients across the week and pushes them into the Groceries todo list. Rate-limited to 20 extraction calls per user per day.
+- **Holidays** — countdown-styled list of upcoming trips/days-off, per-person tagging, document uploads (PDF/image, 10MB), and optional push-to-calendar that writes an all-day event to your Google or Microsoft calendar. Edits + deletes propagate. A small calendar-check icon shows whether the holiday is in sync.
+- **Today dashboard widgets** — tonight's planned dinner (with cook-mode shortcut) and the next holiday's countdown.
+
+Claude calls use `claude-sonnet-4-6` via structured output (Zod-schema-validated). Each call is rate-limited per user (20/day) and logged to `claude_usage` for cost monitoring. Set `ANTHROPIC_API_KEY` in Railway or extraction endpoints return a clear error.
 
 ## What's deferred to later sprints
 

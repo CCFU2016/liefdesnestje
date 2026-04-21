@@ -101,3 +101,13 @@ body {
 main {
   -webkit-overflow-scrolling: touch;
 }
+
+/* Hide the scrollbar on the mobile tab bar so the horizontal scroll
+   doesn't add a visible track under the tab icons. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

@@ -1,6 +1,16 @@
 import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
-import { calendars, events, externalCalendarAccounts, householdMembers, todos, todoLists, trips } from "@/lib/db/schema";
+import {
+  calendars,
+  events,
+  externalCalendarAccounts,
+  holidays,
+  householdMembers,
+  mealPlanEntries,
+  recipes,
+  todos,
+  todoLists,
+} from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or, inArray } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInCalendarDays, endOfDay, format, startOfDay } from "date-fns";
@@ -12,8 +22,9 @@ export default async function TodayPage() {
   const now = new Date();
   const dayStart = startOfDay(now);
   const dayEnd = endOfDay(now);
+  const today = toDateStr(now);
 
-  const [todayEventsRaw, lists, members] = await Promise.all([
+  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday] = await Promise.all([
     db
       .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
@@ -38,12 +49,37 @@ export default async function TodayPage() {
       .select({ userId: householdMembers.userId, displayName: householdMembers.displayName, color: householdMembers.color })
       .from(householdMembers)
       .where(eq(householdMembers.householdId, ctx.householdId)),
+    db
+      .select({ entry: mealPlanEntries, recipe: recipes })
+      .from(mealPlanEntries)
+      .leftJoin(recipes, eq(mealPlanEntries.recipeId, recipes.id))
+      .where(
+        and(
+          eq(mealPlanEntries.householdId, ctx.householdId),
+          isNull(mealPlanEntries.deletedAt),
+          eq(mealPlanEntries.date, today),
+          or(eq(mealPlanEntries.visibility, "shared"), eq(mealPlanEntries.authorId, ctx.userId))
+        )
+      )
+      .limit(1),
+    db
+      .select()
+      .from(holidays)
+      .where(
+        and(
+          eq(holidays.householdId, ctx.householdId),
+          isNull(holidays.deletedAt),
+          gte(holidays.startsOn, today),
+          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId))
+        )
+      )
+      .orderBy(holidays.startsOn)
+      .limit(1)
+      .then((r) => r[0]),
   ]);
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
 
-  // Attach a display color + normalize all-day event dates (stored as UTC
-  // midnight, need to render as "today" not "2am local").
   const todayEvents = todayEventsRaw.map((r) => {
     let startsAt = r.event.startsAt;
     let endsAt = r.event.endsAt;
@@ -65,6 +101,8 @@ export default async function TodayPage() {
     };
   });
 
+  const tonight = tonightRaw[0];
+
   const listIds = lists.map((l) => l.id);
   const topTodos = listIds.length
     ? await db
@@ -82,28 +120,12 @@ export default async function TodayPage() {
         .limit(5)
     : [];
 
-  const upcomingTrip = (
-    await db
-      .select()
-      .from(trips)
-      .where(
-        and(
-          eq(trips.householdId, ctx.householdId),
-          isNull(trips.deletedAt),
-          gte(trips.startsAt, now),
-          or(eq(trips.visibility, "shared"), eq(trips.authorId, ctx.userId))
-        )
-      )
-      .orderBy(trips.startsAt)
-      .limit(1)
-  )[0];
-
   return (
     <div className="mx-auto max-w-5xl p-6 md:p-10">
       <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
         {greet()} — {format(now, "EEEE, d MMMM")}
       </h1>
-      <p className="text-sm text-zinc-500 mt-1">Here's what's on your plate.</p>
+      <p className="text-sm text-zinc-500 mt-1">Here&apos;s what&apos;s on your plate.</p>
 
       <div className="grid gap-4 mt-8 md:grid-cols-2">
         <Card>
@@ -139,6 +161,47 @@ export default async function TodayPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Tonight&apos;s dinner</CardTitle>
+            <Link href="/meals" className="text-xs text-zinc-500 hover:underline">Open meals</Link>
+          </CardHeader>
+          <CardContent>
+            {!tonight ? (
+              <p className="text-sm text-zinc-500">Nothing planned. <Link href="/meals" className="underline">Plan a meal →</Link></p>
+            ) : (
+              <div className="flex items-center gap-3">
+                {tonight.recipe?.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={tonight.recipe.imageUrl}
+                    alt=""
+                    className="h-14 w-14 rounded-md object-cover"
+                  />
+                )}
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {tonight.recipe?.title ?? tonight.entry.freeText ?? "Dinner"}
+                  </div>
+                  {tonight.recipe?.cookTimeMinutes && (
+                    <div className="text-xs text-zinc-500">
+                      ~{tonight.recipe.cookTimeMinutes} min cook time
+                    </div>
+                  )}
+                  {tonight.recipe && (
+                    <Link
+                      href={`/meals/recipes/${tonight.recipe.id}/cook`}
+                      className="text-xs text-zinc-600 hover:underline mt-0.5 inline-block"
+                    >
+                      Start cook mode →
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Top to-dos</CardTitle>
             <Link href="/todos" className="text-xs text-zinc-500 hover:underline">Open to-dos</Link>
           </CardHeader>
@@ -160,23 +223,24 @@ export default async function TodayPage() {
           </CardContent>
         </Card>
 
-        {upcomingTrip && upcomingTrip.startsAt && (
-          <Card className="md:col-span-2">
+        {nextHoliday && (
+          <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Next trip</CardTitle>
-              <Link href="/trips" className="text-xs text-zinc-500 hover:underline">Open trips</Link>
+              <CardTitle>Next holiday</CardTitle>
+              <Link href="/holidays" className="text-xs text-zinc-500 hover:underline">Open holidays</Link>
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline justify-between">
-                <div>
-                  <div className="text-lg font-medium">{upcomingTrip.title}</div>
+                <div className="min-w-0">
+                  <div className="text-lg font-medium truncate">{nextHoliday.title}</div>
                   <div className="text-sm text-zinc-500">
-                    {upcomingTrip.destination ?? ""} · {format(upcomingTrip.startsAt, "d MMM yyyy")}
+                    {format(parseDate(nextHoliday.startsOn), "d MMM yyyy")}
+                    {nextHoliday.endsOn && ` – ${format(parseDate(nextHoliday.endsOn), "d MMM yyyy")}`}
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-right shrink-0 ml-3">
                   <div className="text-3xl font-bold">
-                    {differenceInCalendarDays(upcomingTrip.startsAt, now)}
+                    {differenceInCalendarDays(parseDate(nextHoliday.startsOn), now)}
                   </div>
                   <div className="text-xs text-zinc-500">days</div>
                 </div>
@@ -194,4 +258,13 @@ function greet() {
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
+}
+
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function parseDate(yyyyMmDd: string): Date {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }

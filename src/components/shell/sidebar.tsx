@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   Bell,
   LogOut,
+  UtensilsCrossed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,10 +24,11 @@ const primary: NavItem[] = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/todos", label: "To-dos", icon: CheckSquare },
   { href: "/notes", label: "Notes", icon: NotebookText },
+  { href: "/meals", label: "Meals", icon: UtensilsCrossed },
+  { href: "/holidays", label: "Holidays", icon: Plane },
 ];
 
 const secondary: NavItem[] = [
-  { href: "/trips", label: "Trips", icon: Plane },
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/photos", label: "Photos", icon: ImageIcon },
 ];
@@ -52,7 +54,7 @@ export function Sidebar({
         ))}
       </nav>
       <div className="mt-6 px-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
-        Upcoming (soon)
+        Coming soon
       </div>
       <nav className="mt-1 flex flex-col gap-0.5">
         {secondary.map((item) => (
