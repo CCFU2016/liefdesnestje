@@ -10,6 +10,7 @@ import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EventDialog } from "./event-dialog";
+import { ThreeDayView } from "./three-day-view";
 
 const locales = { "en-US": enUS };
 // Week starts Monday, not Sunday.
@@ -84,7 +85,9 @@ export function CalendarShell({
   accounts: AccountVM[];
   calendars: CalendarVM[];
 }) {
-  const [view, setView] = useState<View>(isMobile() ? "agenda" : "week");
+  const [onMobile, setOnMobile] = useState(false);
+  useEffect(() => setOnMobile(isMobile()), []);
+  const [view, setView] = useState<View>(isMobile() ? "agenda" : ("week" as View));
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<{
@@ -234,7 +237,12 @@ export function CalendarShell({
               onView={setView}
               date={anchor}
               onNavigate={setAnchor}
-              views={["month", "week", "day", "agenda"]}
+              views={
+                onMobile
+                  ? ({ day: true, threeDay: ThreeDayView, agenda: true } as unknown as View[])
+                  : (["month", "week", "day", "agenda"] as View[])
+              }
+              messages={{ threeDay: "3 days" } as Record<string, string>}
               length={30}
               selectable
               popup
