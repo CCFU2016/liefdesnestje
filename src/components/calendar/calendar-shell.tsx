@@ -12,7 +12,9 @@ import { Card } from "@/components/ui/card";
 import { EventDialog } from "./event-dialog";
 
 const locales = { "en-US": enUS };
-const localizer = dateFnsLocalizer({ format, parse, startOfWeek, getDay, locales });
+// Week starts Monday, not Sunday.
+const startOfWeekMonday = (date: Date | number) => startOfWeek(date, { weekStartsOn: 1 });
+const localizer = dateFnsLocalizer({ format, parse, startOfWeek: startOfWeekMonday, getDay, locales });
 
 type CalendarVM = {
   id: string;
