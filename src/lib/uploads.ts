@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 export const UPLOAD_ROOT = process.env.UPLOAD_DIR ?? (process.env.NODE_ENV === "production" ? "/data/uploads" : "./.local-uploads");
@@ -45,8 +45,12 @@ export async function saveUpload(input: {
 
   const ext = extForMime(input.mime);
   const name = input.filename ?? `${randomUUID()}.${ext}`;
-  // defend against path traversal in supplied filenames
-  const safeName = name.replace(/[/\\..]/g, "_");
+  // Defend against path traversal without mangling the extension. The
+  // previous regex [/\\..] was a bug — `.` inside a character class is
+  // literal, and the redundant `..` just meant "match any dot twice",
+  // so every `.` (including the extension separator) got turned into _.
+  // That's why recipe URLs ended up as abc_jpg instead of abc.jpg.
+  const safeName = basename(name).replace(/[\\/]/g, "_").replace(/\.\./g, "_");
   const full = join(dir, safeName);
   await writeFile(full, input.bytes);
   return { path: full, relPath: join(input.subdir, safeName) };

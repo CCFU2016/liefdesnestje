@@ -46,20 +46,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
 }
 
 function guessMime(p: string): string {
-  const ext = p.split(".").pop()?.toLowerCase() ?? "";
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    case "pdf":
-      return "application/pdf";
-    default:
-      return "application/octet-stream";
-  }
+  const lower = p.toLowerCase();
+  // Accept either ".jpg" or "_jpg" at end. Earlier versions had a buggy
+  // filename sanitizer that turned the extension dot into an underscore,
+  // so some files on the Volume are named abc_jpg instead of abc.jpg —
+  // still perfectly valid JPEG bytes, just misnamed.
+  if (/[._](jpe?g)$/.test(lower)) return "image/jpeg";
+  if (/[._]png$/.test(lower)) return "image/png";
+  if (/[._]gif$/.test(lower)) return "image/gif";
+  if (/[._]webp$/.test(lower)) return "image/webp";
+  if (/[._]pdf$/.test(lower)) return "application/pdf";
+  return "application/octet-stream";
 }
