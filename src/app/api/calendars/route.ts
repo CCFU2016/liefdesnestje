@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 
 export async function GET() {
@@ -30,7 +30,8 @@ export async function GET() {
           accountIds.length ? inArray(calendars.accountId, accountIds) : undefined,
           eq(calendars.householdId, ctx.householdId)
         )!
-      );
+      )
+      .orderBy(asc(calendars.name));
 
     const memberByUserId = new Map(members.map((m) => [m.userId, m]));
     const accountById = new Map(accounts.map((a) => [a.id, a]));

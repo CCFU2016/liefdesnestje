@@ -3,13 +3,11 @@ import { readFile, stat } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
-// Public serve for recipe images. Filenames are random UUIDs (see
-// src/lib/uploads.ts), so URLs are unguessable and never exposed outside
-// the authed app. We used to gate this with a session check, but that
-// added one DB round-trip per image — when the recipe list loads 20+
-// pictures in parallel, the connection pool fills up and images start
-// failing with 401s. The UUID-as-capability is a reasonable privacy
-// boundary for a 2-person household app.
+// Public serve for recipe images. Filenames are random UUIDs
+// (src/lib/uploads.ts), so URLs are unguessable and only surfaced in the
+// authed app. Kept public to avoid a DB round-trip per image — the recipe
+// list loads 20+ images in parallel and the session lookup was saturating
+// the connection pool.
 export async function GET(_req: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const rel = normalize(path.join("/"));
@@ -18,9 +16,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
   }
   const full = join(UPLOAD_ROOT, "recipes", rel);
   try {
-    await stat(full);
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const st = await stat(full);
+    if (!st.isFile()) {
+      console.warn(`[uploads] not a file: ${full}`);
+      return NextResponse.json({ error: "Not a file" }, { status: 404 });
+    }
+  } catch (e) {
+    // Log the resolved path + UPLOAD_ROOT so Railway logs show whether
+    // the Volume mount / env is set up correctly.
+    console.warn(
+      `[uploads] miss: ${full} (UPLOAD_ROOT=${UPLOAD_ROOT}, rel=${rel}, err=${
+        e instanceof Error ? e.message : String(e)
+      })`
+    );
+    return NextResponse.json(
+      { error: "Not found", path: full, uploadRoot: UPLOAD_ROOT },
+      { status: 404 }
+    );
   }
   const bytes = await readFile(full);
   const mime = guessMime(rel);
