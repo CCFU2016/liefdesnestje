@@ -46,6 +46,10 @@ type EventRow = {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+function isMobile() {
+  return typeof window !== "undefined" && window.innerWidth < 768;
+}
+
 export function CalendarShell({
   members,
   accounts,
@@ -55,7 +59,7 @@ export function CalendarShell({
   accounts: AccountVM[];
   calendars: CalendarVM[];
 }) {
-  const [view, setView] = useState<View>(typeof window !== "undefined" && window.innerWidth < 768 ? "day" : "week");
+  const [view, setView] = useState<View>(isMobile() ? "agenda" : "week");
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<{
@@ -193,19 +197,21 @@ export function CalendarShell({
         </aside>
 
         <div className="flex-1 min-w-0">
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 overflow-hidden">
             <Calendar
               localizer={localizer}
               events={rbcEvents}
               startAccessor="start"
               endAccessor="end"
-              style={{ height: "75vh" }}
+              style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}
               view={view}
               onView={setView}
               date={anchor}
               onNavigate={setAnchor}
-              views={["month", "week", "day"]}
+              views={["month", "week", "day", "agenda"]}
+              length={30}
               selectable
+              popup
               eventPropGetter={eventStyleGetter}
               onSelectSlot={(slot) => {
                 if (calendars.length === 0) {
@@ -218,6 +224,19 @@ export function CalendarShell({
                 setDialog({ event: (ev as RBCEvent & { resource: EventRow }).resource })
               }
             />
+          </div>
+          <div className="md:hidden mt-2 flex items-center justify-between text-xs text-zinc-500">
+            <button
+              onClick={async () => {
+                await fetch("/api/calendar-sync", { method: "POST" });
+                mutate();
+                toast.success("Synced");
+              }}
+              className="px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Sync now
+            </button>
+            <span>{calendars.filter((c) => !hiddenCalendars.has(c.id)).length} calendars</span>
           </div>
           {isLoading && <div className="text-xs text-zinc-500 mt-2">Loading…</div>}
         </div>

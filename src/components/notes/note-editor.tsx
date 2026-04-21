@@ -191,7 +191,7 @@ function Toolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
   };
 
   return (
-    <div className="sticky top-0 z-10 -mx-4 mb-4 flex flex-wrap items-center gap-0.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur px-4 py-1.5">
+    <div className="sticky top-0 z-10 -mx-4 mb-4 flex items-center gap-0.5 border-b border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur px-4 py-1.5 overflow-x-auto">
       <button className={btn(editor.isActive("heading", { level: 1 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
         <Heading1 className="h-4 w-4" />
       </button>

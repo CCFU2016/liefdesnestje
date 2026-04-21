@@ -25,6 +25,68 @@ body {
   color: var(--foreground);
 }
 
+/* react-big-calendar tweaks — mobile friendly + dark mode adjustments */
 .rbc-calendar {
   font-family: var(--font-sans);
+  color: var(--foreground);
+}
+.rbc-toolbar {
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.rbc-toolbar button {
+  color: inherit;
+}
+.rbc-toolbar button:hover,
+.rbc-toolbar button:focus {
+  background-color: rgb(244 244 245 / 0.6);
+}
+.dark .rbc-toolbar button:hover,
+.dark .rbc-toolbar button:focus {
+  background-color: rgb(39 39 42 / 0.6);
+}
+.dark .rbc-off-range-bg {
+  background: rgb(24 24 27);
+}
+.dark .rbc-today {
+  background: rgb(63 63 70 / 0.3);
+}
+.dark .rbc-header,
+.dark .rbc-month-view,
+.dark .rbc-time-view,
+.dark .rbc-time-header,
+.dark .rbc-time-content,
+.dark .rbc-day-bg,
+.dark .rbc-agenda-view table {
+  border-color: rgb(39 39 42);
+}
+.dark .rbc-agenda-view table.rbc-agenda-table tbody > tr > td,
+.dark .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+  border-color: rgb(39 39 42);
+}
+
+/* Mobile: denser toolbar, larger tappable agenda rows */
+@media (max-width: 767px) {
+  .rbc-toolbar {
+    font-size: 0.875rem;
+  }
+  .rbc-toolbar-label {
+    padding: 0.25rem 0;
+  }
+  .rbc-btn-group button {
+    padding: 0.35rem 0.6rem;
+  }
+  .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+/* iOS: prevent pull-to-refresh fighting the app's own scroll, let momentum
+   scroll work inside the main container */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+main {
+  -webkit-overflow-scrolling: touch;
 }
