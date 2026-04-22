@@ -6,6 +6,7 @@ import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 import { DOC_MIME_TYPES, MAX_DOC_BYTES, UPLOAD_ROOT, saveUpload } from "@/lib/uploads";
+import { sniffMime } from "@/lib/file-magic";
 
 export const maxDuration = 60;
 
@@ -42,12 +43,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    // Magic-byte verification — don't trust the client MIME header.
+    const sniffed = sniffMime(bytes);
+    if (!sniffed || !DOC_MIME_TYPES.includes(sniffed as (typeof DOC_MIME_TYPES)[number])) {
+      return NextResponse.json(
+        { error: "File doesn't look like a real PDF/JPEG/PNG/WebP." },
+        { status: 400 }
+      );
+    }
     const safeName = file.name.replace(/[/\\..]/g, "_").slice(0, 120) || `document`;
     await saveUpload({
       subdir: `holidays/${id}`,
       filename: safeName,
       bytes,
-      mime: file.type,
+      mime: sniffed,
     });
 
     const docUrl = `/api/holidays/${id}/document?name=${encodeURIComponent(safeName)}`;

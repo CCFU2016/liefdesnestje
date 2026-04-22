@@ -6,6 +6,7 @@ import {
   ClaudeNotConfiguredError,
 } from "@/lib/claude";
 import { IMAGE_MIME_TYPES, MAX_IMAGE_BYTES, saveUpload, type ImageMime } from "@/lib/uploads";
+import { sniffMime } from "@/lib/file-magic";
 
 export const maxDuration = 60;
 
@@ -21,8 +22,7 @@ export async function POST(req: Request) {
     if (file.size > MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: "Image too large (max 10MB)" }, { status: 413 });
     }
-    const mime = file.type;
-    if (!IMAGE_MIME_TYPES.includes(mime as ImageMime)) {
+    if (!IMAGE_MIME_TYPES.includes(file.type as ImageMime)) {
       return NextResponse.json(
         { error: "Supported types: JPEG, PNG, GIF, WebP" },
         { status: 400 }
@@ -31,6 +31,16 @@ export async function POST(req: Request) {
 
     const bytes = new Uint8Array(await file.arrayBuffer());
 
+    // Magic-byte check — don't send whatever the client claims to Claude.
+    const sniffed = sniffMime(bytes);
+    if (!sniffed || !IMAGE_MIME_TYPES.includes(sniffed as ImageMime)) {
+      return NextResponse.json(
+        { error: "File doesn't look like a real JPEG/PNG/GIF/WebP image." },
+        { status: 400 }
+      );
+    }
+    const mime = sniffed as ImageMime;
+
     // Save to the upload volume so we have a persistent reference.
     const { relPath } = await saveUpload({ subdir: "recipes", bytes, mime });
     const imageUrl = `/api/uploads/recipes/${relPath.split("/").slice(1).join("/")}`;
@@ -38,7 +48,7 @@ export async function POST(req: Request) {
     const base64 = Buffer.from(bytes).toString("base64");
     const recipe = await extractRecipeFromImage({
       imageBase64: base64,
-      mediaType: mime as ImageMime,
+      mediaType: mime,
       userId: ctx.userId,
       hintText: file.name ? `Filename: ${file.name}` : undefined,
     });

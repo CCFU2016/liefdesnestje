@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 import { IMAGE_MIME_TYPES, MAX_IMAGE_BYTES, saveUpload, type ImageMime } from "@/lib/uploads";
+import { sniffMime } from "@/lib/file-magic";
 
 export const maxDuration = 30;
 
@@ -19,8 +20,8 @@ export async function POST(req: Request) {
     if (file.size > MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: "Image too large (max 10MB)" }, { status: 413 });
     }
-    const mime = file.type as ImageMime;
-    if (!IMAGE_MIME_TYPES.includes(mime)) {
+    const claimed = file.type as ImageMime;
+    if (!IMAGE_MIME_TYPES.includes(claimed)) {
       return NextResponse.json(
         { error: "Supported types: JPEG, PNG, GIF, WebP" },
         { status: 400 }
@@ -28,6 +29,16 @@ export async function POST(req: Request) {
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
+    // Trust magic bytes over the client-supplied MIME: a spoofed Content-Type
+    // on a binary blob is the classic path to serving HTML or SVG as "image".
+    const sniffed = sniffMime(bytes);
+    if (!sniffed || !IMAGE_MIME_TYPES.includes(sniffed as ImageMime)) {
+      return NextResponse.json(
+        { error: "File doesn't look like a real JPEG/PNG/GIF/WebP image." },
+        { status: 400 }
+      );
+    }
+    const mime = sniffed as ImageMime;
     const { relPath } = await saveUpload({ subdir: "recipes", bytes, mime });
     const imageUrl = `/api/uploads/recipes/${relPath.split("/").slice(1).join("/")}`;
     return NextResponse.json({ imageUrl });
