@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { syncCalendarEvents } from "@/lib/microsoft/sync";
+import { timingSafeEqualStr } from "@/lib/timing-safe-eq";
 
 // Microsoft Graph webhook endpoint.
 // - Initial validation: Graph does GET/POST with ?validationToken=... — echo it back plain-text within 10s.
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   // Accept fast, process in background
   queueMicrotask(async () => {
     for (const n of payload.value ?? []) {
-      if (!n.clientState || n.clientState !== secret) {
+      if (!n.clientState || !timingSafeEqualStr(n.clientState, secret)) {
         console.warn("MS webhook: bad clientState, ignoring");
         continue;
       }

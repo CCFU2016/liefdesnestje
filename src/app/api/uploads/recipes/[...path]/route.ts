@@ -2,13 +2,20 @@ import { NextResponse } from "next/server";
 import { readFile, stat } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { UPLOAD_ROOT } from "@/lib/uploads";
+import { getCachedUserId } from "@/lib/auth/session-cache";
 
-// Public serve for recipe images. Filenames are random UUIDs
-// (src/lib/uploads.ts), so URLs are unguessable and only surfaced in the
-// authed app. Kept public to avoid a DB round-trip per image — the recipe
-// list loads 20+ images in parallel and the session lookup was saturating
-// the connection pool.
+// Auth-gated serve for recipe images. Filenames are random UUIDs so URLs
+// are already unguessable, but we still require a signed-in caller so a
+// leaked URL can't be hotlinked outside the app.
+//
+// Uses a 60s in-memory session cache to avoid slamming the DB — a recipe
+// grid loads 20+ images in parallel and a cold session lookup per image
+// saturated the connection pool in earlier versions.
 export async function GET(_req: Request, { params }: { params: Promise<{ path: string[] }> }) {
+  const userId = await getCachedUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
   const { path } = await params;
   const rel = normalize(path.join("/"));
   if (rel.startsWith("..") || rel.includes("\0")) {
@@ -39,8 +46,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       "content-type": mime,
-      // Filenames are UUIDs → content never changes. Cache aggressively.
-      "cache-control": "public, max-age=604800, immutable",
+      // Filenames are UUIDs → content never changes. Cache in the private
+      // browser cache only (auth-gated, don't let shared caches keep a copy).
+      "cache-control": "private, max-age=604800, immutable",
     },
   });
 }

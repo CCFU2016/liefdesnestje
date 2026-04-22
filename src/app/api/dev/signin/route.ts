@@ -9,14 +9,21 @@ import { cookies } from "next/headers";
 // Creates (or reuses) a demo user + household and sets an Auth.js session cookie,
 // so you can see the app before wiring up real Google OAuth.
 
-function assertAllowed() {
+function assertAllowed(req: Request) {
   if (process.env.NODE_ENV === "production") throw new Error("disabled in production");
   if (process.env.ALLOW_DEV_LOGIN !== "1") throw new Error("ALLOW_DEV_LOGIN must be '1'");
+  // Defense in depth: even if the two env guards are misconfigured (e.g. a
+  // preview deployment accidentally sets ALLOW_DEV_LOGIN=1), only allow the
+  // dev-login flow from a local origin. This protects against an attacker
+  // bypassing the signin page entirely by POSTing to this endpoint.
+  const host = new URL(req.url).hostname;
+  const allowed = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0";
+  if (!allowed) throw new Error(`dev login blocked on non-local host: ${host}`);
 }
 
 export async function POST(req: Request) {
   try {
-    assertAllowed();
+    assertAllowed(req);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 403 });
   }

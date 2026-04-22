@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { calendars, externalCalendarAccounts, householdMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { syncCalendarEvents } from "@/lib/google/sync";
+import { timingSafeEqualStr } from "@/lib/timing-safe-eq";
 
 // Google Calendar push notifications.
 // Headers sent by Google:
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
   if (state === "sync") return NextResponse.json({ ok: true });
 
   const secret = process.env.WEBHOOK_SECRET;
-  if (!secret || token !== secret) {
+  if (!secret || !token || !timingSafeEqualStr(token, secret)) {
     console.warn("Google webhook: bad or missing token, ignoring");
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
