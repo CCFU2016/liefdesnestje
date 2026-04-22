@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withSerwistInit from "@serwist/next";
 
 // Baseline security headers applied to every response. We skip a strict CSP
 // for now because Next's hydration needs inline scripts/styles and a proper
@@ -28,6 +29,8 @@ const SECURITY_HEADERS = [
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self' https:",
+      "worker-src 'self' blob:",
+      "manifest-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -56,4 +59,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withSerwist = withSerwistInit({
+  swSrc: "src/app/sw.ts",
+  swDest: "public/sw.js",
+  // Don't run the service worker in dev — it caches aggressively and makes
+  // HMR confusing. Enable with `pnpm dev` + setting SERWIST_DEV=1 if you
+  // specifically want to test offline behavior.
+  disable: process.env.NODE_ENV === "development" && process.env.SERWIST_DEV !== "1",
+});
+
+export default withSerwist(nextConfig);
