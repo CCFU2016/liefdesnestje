@@ -413,6 +413,27 @@ export const mealPlanEntries = pgTable(
   ]
 );
 
+// Dinner absences: rows exist only for (userId, date) pairs where the member
+// is NOT eating at home. Absence of a row == at home, so the weekly popup
+// just needs to sync the "away" set for next week.
+export const dinnerAbsences = pgTable(
+  "dinner_absences",
+  {
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD, applies to that day's dinner
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.householdId, t.userId, t.date] }),
+    index("dinner_absences_household_date_idx").on(t.householdId, t.date),
+  ]
+);
+
 export const claudeUsage = pgTable(
   "claude_usage",
   {

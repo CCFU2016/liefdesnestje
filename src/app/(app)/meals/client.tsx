@@ -44,12 +44,18 @@ function toYmd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+type Member = { userId: string; displayName: string; color: string };
+
+type Absence = { userId: string; date: string };
+
 export function MealsClient({
   recipes,
   currentUserId: _currentUserId,
+  members,
 }: {
   recipes: RecipeOption[];
   currentUserId: string;
+  members: Member[];
 }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [addDialog, setAddDialog] = useState<{ date: string; entry?: MealEntry } | null>(null);
@@ -68,6 +74,42 @@ export function MealsClient({
     { refreshInterval: 5000 }
   );
   const entries = data?.entries ?? [];
+
+  const { data: absData, mutate: mutateAbs } = useSWR<{ absences: Absence[] }>(
+    `/api/dinner-absences?from=${rangeFrom}&to=${rangeTo}`,
+    fetcher,
+    { refreshInterval: 10000 }
+  );
+  const absenceSet = useMemo(() => {
+    const s = new Set<string>();
+    for (const a of absData?.absences ?? []) s.add(`${a.userId}|${a.date}`);
+    return s;
+  }, [absData]);
+
+  const toggleAbsence = async (userId: string, ymd: string) => {
+    const k = `${userId}|${ymd}`;
+    const willBeAbsent = !absenceSet.has(k);
+    // Optimistic update
+    mutateAbs(
+      (prev) => {
+        const cur = prev?.absences ?? [];
+        if (willBeAbsent) return { absences: [...cur, { userId, date: ymd }] };
+        return { absences: cur.filter((a) => !(a.userId === userId && a.date === ymd)) };
+      },
+      false
+    );
+    try {
+      const res = await fetch("/api/dinner-absences", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, date: ymd, absent: willBeAbsent }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Couldn't update — try again.");
+    }
+    mutateAbs();
+  };
 
   const entriesByDate = useMemo(() => {
     const m = new Map<string, MealEntry[]>();
@@ -208,6 +250,33 @@ export function MealsClient({
                       />
                     ))}
                   </ul>
+                )}
+                {members.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap gap-1">
+                    {members.map((m) => {
+                      const isAbsent = absenceSet.has(`${m.userId}|${ymd}`);
+                      return (
+                        <button
+                          key={m.userId}
+                          type="button"
+                          onClick={() => toggleAbsence(m.userId, ymd)}
+                          title={isAbsent ? `${m.displayName} eating out` : `${m.displayName} home`}
+                          className={
+                            "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] transition-colors " +
+                            (isAbsent
+                              ? "border-amber-300 bg-amber-50 text-amber-900 line-through dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                              : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800/40 dark:text-zinc-400")
+                          }
+                        >
+                          <span
+                            className="inline-block h-1.5 w-1.5 rounded-full"
+                            style={{ background: m.color }}
+                          />
+                          {m.displayName}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </Card>
             </li>

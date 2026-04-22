@@ -2,6 +2,7 @@ import { requireHouseholdMember } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import {
   calendars,
+  dinnerAbsences,
   events,
   externalCalendarAccounts,
   holidays,
@@ -12,6 +13,7 @@ import {
   todoLists,
 } from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or, inArray } from "drizzle-orm";
+import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInCalendarDays, endOfDay, format, startOfDay } from "date-fns";
 import Link from "next/link";
@@ -24,7 +26,7 @@ export default async function TodayPage() {
   const dayEnd = endOfDay(now);
   const today = toDateStr(now);
 
-  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday] = await Promise.all([
+  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences] = await Promise.all([
     db
       .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
@@ -76,6 +78,12 @@ export default async function TodayPage() {
       .orderBy(holidays.startsOn)
       .limit(1)
       .then((r) => r[0]),
+    db
+      .select({ userId: dinnerAbsences.userId })
+      .from(dinnerAbsences)
+      .where(
+        and(eq(dinnerAbsences.householdId, ctx.householdId), eq(dinnerAbsences.date, today))
+      ),
   ]);
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
@@ -102,6 +110,10 @@ export default async function TodayPage() {
   });
 
   const tonight = tonightRaw[0];
+
+  const absentMembers = todayAbsences
+    .map((a) => memberByUserId.get(a.userId))
+    .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
   const listIds = lists.map((l) => l.id);
   const topTodos = listIds.length
@@ -197,6 +209,22 @@ export default async function TodayPage() {
                 </div>
               </div>
             )}
+            {absentMembers.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {absentMembers.map((m) => (
+                  <span
+                    key={m.userId}
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                  >
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full"
+                      style={{ background: m.color }}
+                    />
+                    {m.displayName} eating out
+                  </span>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -222,6 +250,14 @@ export default async function TodayPage() {
             )}
           </CardContent>
         </Card>
+
+        <DinnerWeeklyPrompt
+          members={members.map((m) => ({
+            userId: m.userId,
+            displayName: m.displayName,
+            color: m.color,
+          }))}
+        />
 
         {nextHoliday && (
           <Card>
