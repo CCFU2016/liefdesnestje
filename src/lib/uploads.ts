@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 
 export const UPLOAD_ROOT = process.env.UPLOAD_DIR ?? (process.env.NODE_ENV === "production" ? "/data/uploads" : "./.local-uploads");
 
@@ -69,9 +70,8 @@ export async function downloadAndSaveImage(
   subdir = "recipes"
 ): Promise<string | null> {
   try {
-    const res = await fetch(remoteUrl, {
+    const res = await safeFetch(remoteUrl, {
       signal: AbortSignal.timeout(8000),
-      redirect: "follow",
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
@@ -113,7 +113,10 @@ export async function downloadAndSaveImage(
     //   /api/uploads/<subdir>/<path...>
     const inner = relPath.split("/").slice(1).join("/");
     return `/api/uploads/${subdir}/${inner}`;
-  } catch {
+  } catch (e) {
+    if (e instanceof SafeFetchError) {
+      console.warn("downloadAndSaveImage blocked by safeFetch:", e.message);
+    }
     return null;
   }
 }

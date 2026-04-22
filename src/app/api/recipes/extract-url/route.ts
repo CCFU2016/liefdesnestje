@@ -7,6 +7,7 @@ import {
   extractRecipeFromText,
 } from "@/lib/claude";
 import { downloadAndSaveImage } from "@/lib/uploads";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 
 export const maxDuration = 60;
 
@@ -92,14 +93,16 @@ async function fetchBoundedHtml(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Liefdesnestje/1.0; +https://github.com/CCFU2016/liefdesnestje)",
-        Accept: "text/html,application/xhtml+xml",
-      },
-    });
+    const res = await safeFetch(
+      url,
+      {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Liefdesnestje/1.0; +https://github.com/CCFU2016/liefdesnestje)",
+          Accept: "text/html,application/xhtml+xml",
+        },
+      }
+    );
     clearTimeout(timeout);
     if (!res.ok) return null;
     // Bound the response size.
@@ -121,7 +124,10 @@ async function fetchBoundedHtml(url: string): Promise<string | null> {
     }
     const buf = Buffer.concat(chunks.map((c) => Buffer.from(c)));
     return buf.toString("utf8");
-  } catch {
+  } catch (e) {
+    if (e instanceof SafeFetchError) {
+      console.warn("fetchBoundedHtml blocked by safeFetch:", e.message);
+    }
     return null;
   }
 }

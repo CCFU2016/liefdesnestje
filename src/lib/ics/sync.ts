@@ -4,6 +4,7 @@ import { calendars, events } from "@/lib/db/schema";
 import { and, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import { requireEnv as _requireEnv } from "@/lib/env";
 import { RRule } from "rrule";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 
 void _requireEnv; // reserved for future use
 
@@ -38,7 +39,12 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
     const timeout = setTimeout(() => controller.abort(), 20_000);
     let res: Response;
     try {
-      res = await fetch(cal.icsUrl, { headers, redirect: "follow", signal: controller.signal });
+      res = await safeFetch(cal.icsUrl, { headers, signal: controller.signal });
+    } catch (e) {
+      if (e instanceof SafeFetchError) {
+        throw new Error(`Feed URL rejected for safety: ${e.message}`);
+      }
+      throw e;
     } finally {
       clearTimeout(timeout);
     }
