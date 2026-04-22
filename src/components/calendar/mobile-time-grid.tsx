@@ -341,15 +341,28 @@ type AllDaySeg = { event: MobileEvent; startCol: number; endCol: number };
 function layOutAllDay(events: MobileEvent[], dayList: Date[]): AllDaySeg[][] {
   if (events.length === 0) return [];
   const segs: AllDaySeg[] = [];
+  const viewStart = startOfDay(dayList[0]).getTime();
+  const viewEnd = startOfDay(dayList[dayList.length - 1]).getTime();
+  const MS_DAY = 86_400_000;
+
   for (const e of events) {
-    const startDay = startOfDay(e.start);
+    const startDay = startOfDay(e.start).getTime();
     // An exclusive end like "April 22 00:00" for a whole-of-21 event is common
     // for Google; step back 1 ms to put the end on the correct day.
-    const endDay = startOfDay(new Date(e.end.getTime() - 1));
-    let startCol = dayList.findIndex((d) => !isBeforeDay(d, startDay));
-    let endCol = findLastIndex(dayList, (d) => !isAfterDay(d, endDay));
-    if (startCol < 0) startCol = 0;
-    if (endCol < 0) endCol = dayList.length - 1;
+    const endDay = startOfDay(new Date(e.end.getTime() - 1)).getTime();
+
+    // Skip events that don't overlap the view at all. Without this the
+    // previous clamp-to-edges fallback drew past events (e.g. last week's
+    // recurring all-day events still in the fetched window) as spanning
+    // the full 3-day strip.
+    if (endDay < viewStart) continue;
+    if (startDay > viewEnd) continue;
+
+    // Column = whole days from the view's first day, clamped to [0, N-1].
+    const startColRaw = Math.round((startDay - viewStart) / MS_DAY);
+    const endColRaw = Math.round((endDay - viewStart) / MS_DAY);
+    const startCol = Math.max(0, startColRaw);
+    const endCol = Math.min(dayList.length - 1, endColRaw);
     if (endCol < startCol) continue;
     segs.push({ event: e, startCol, endCol });
   }
@@ -367,15 +380,4 @@ function layOutAllDay(events: MobileEvent[], dayList: Date[]): AllDaySeg[][] {
     if (!placed) rows.push([seg]);
   }
   return rows;
-}
-
-function isBeforeDay(a: Date, b: Date) {
-  return startOfDay(a).getTime() < startOfDay(b).getTime();
-}
-function isAfterDay(a: Date, b: Date) {
-  return startOfDay(a).getTime() > startOfDay(b).getTime();
-}
-function findLastIndex<T>(arr: T[], pred: (x: T) => boolean): number {
-  for (let i = arr.length - 1; i >= 0; i--) if (pred(arr[i])) return i;
-  return -1;
 }
