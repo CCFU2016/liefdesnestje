@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Moon, Sun } from "lucide-react";
+import { Bell, LogOut, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -29,6 +29,11 @@ export function Header({ unreadCount = 0 }: { unreadCount?: number }) {
           <span className="absolute right-1 top-1 inline-flex h-2 w-2 rounded-full bg-red-500" />
         )}
       </Link>
+      <form action="/api/auth/signout" method="post">
+        <Button type="submit" variant="ghost" size="icon" aria-label="Sign out" title="Sign out">
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </form>
     </header>
   );
 }
