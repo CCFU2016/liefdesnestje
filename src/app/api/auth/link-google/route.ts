@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { getLinkGoogleRedirectUri } from "./redirect-uri";
 
 // Start a "link another Google account" OAuth flow. Unlike the primary
 // sign-in flow (handled by Auth.js), this one *requires* an existing
@@ -23,8 +24,17 @@ export async function GET(req: Request) {
       );
     }
 
-    const origin = new URL(req.url).origin;
-    const redirectUri = `${origin}/api/auth/link-google/callback`;
+    const hdrs = await headers();
+    const redirectUri = getLinkGoogleRedirectUri(hdrs, req.url);
+    console.log("[link-google] using redirect_uri =", redirectUri);
+
+    // Debug mode — when called with ?debug=1 we dump the exact redirect_uri
+    // we'd send to Google, so the user can copy it verbatim into their
+    // Google Cloud Console → OAuth client → Authorized redirect URIs.
+    const urlObj = new URL(req.url);
+    if (urlObj.searchParams.get("debug") === "1") {
+      return NextResponse.json({ redirectUri });
+    }
 
     // Opaque random state — we bind it to the session via a signed cookie so
     // an attacker can't forge a callback that attaches a Google identity to

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { db } from "@/lib/db";
 import { accounts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { getLinkGoogleRedirectUri } from "../redirect-uri";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const NONCE_COOKIE = "link_google_state";
@@ -69,7 +70,8 @@ export async function GET(req: Request) {
     const clientSecret = process.env.AUTH_GOOGLE_SECRET;
     if (!clientId || !clientSecret) return redirectWithFlash(req, "not_configured");
 
-    const redirectUri = `${url.origin}/api/auth/link-google/callback`;
+    const hdrs = await headers();
+    const redirectUri = getLinkGoogleRedirectUri(hdrs, req.url);
 
     const body = new URLSearchParams({
       code,
