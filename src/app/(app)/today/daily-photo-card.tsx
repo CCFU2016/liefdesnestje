@@ -45,21 +45,12 @@ export function DailyPhotoCard() {
 
   return (
     <Card className="overflow-hidden">
-      {/*
-        aspect-[4/3] keeps the tile's height predictable so the Events card
-        next to it can stretch to match, but we use object-contain + a
-        subtle neutral background so portrait phone photos show in full
-        (letterboxed on the sides) instead of having their top/bottom
-        cropped off, which was the cropping issue users were seeing.
-      */}
-      <div className="bg-zinc-50 dark:bg-zinc-900 aspect-[4/3] w-full flex items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={url}
-          alt={caption ?? "Photo of the day"}
-          className="max-h-full max-w-full w-auto h-auto object-contain"
-        />
-      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={caption ?? "Photo of the day"}
+        className="w-full aspect-[4/3] object-cover"
+      />
       <div className="p-3 space-y-1">
         <div className="text-[10px] uppercase tracking-wider text-zinc-500">
           Photo of the day
