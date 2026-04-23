@@ -1054,7 +1054,10 @@ function LinkedAccountsEditor() {
         toast.info("That Google account was already linked.");
         break;
       case "in_use":
-        toast.error("That Google account is linked to a different user.");
+        toast.error(
+          "That Google account is already attached to another profile with household data. Ask the other profile's owner to disconnect it first.",
+          { duration: 7000 }
+        );
         break;
       case "bad_state":
         toast.error("Couldn't verify the link request — try again.");

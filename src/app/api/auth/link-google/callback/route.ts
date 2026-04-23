@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { db } from "@/lib/db";
-import { accounts } from "@/lib/db/schema";
+import { accounts, householdMembers, sessions, users } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
-import { getLinkGoogleRedirectUri } from "../redirect-uri";
+import { getLinkGoogleRedirectUri, getPublicOrigin } from "../redirect-uri";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const NONCE_COOKIE = "link_google_state";
@@ -40,22 +40,24 @@ function decodeIdToken(idToken: string): IdTokenClaims | null {
   }
 }
 
-function redirectWithFlash(req: Request, slug: "ok" | string): NextResponse {
-  const u = new URL("/settings", req.url);
+function redirectWithFlash(origin: string, slug: "ok" | string): NextResponse {
+  const u = new URL("/settings", origin);
   u.hash = "accounts";
   u.searchParams.set("linked", slug);
   return NextResponse.redirect(u);
 }
 
 export async function GET(req: Request) {
+  const hdrs = await headers();
+  const origin = getPublicOrigin(hdrs, req.url);
   try {
     const ctx = await requireHouseholdMember();
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     const gError = url.searchParams.get("error");
-    if (gError) return redirectWithFlash(req, gError);
-    if (!code || !state) return redirectWithFlash(req, "missing_code");
+    if (gError) return redirectWithFlash(origin, gError);
+    if (!code || !state) return redirectWithFlash(origin, "missing_code");
 
     // Verify state matches the cookie nonce AND encodes the current user.
     const [stateUserId, nonce] = state.split(".", 2);
@@ -63,14 +65,13 @@ export async function GET(req: Request) {
     const expected = jar.get(NONCE_COOKIE)?.value;
     jar.delete(NONCE_COOKIE);
     if (!expected || expected !== nonce || stateUserId !== ctx.userId) {
-      return redirectWithFlash(req, "bad_state");
+      return redirectWithFlash(origin, "bad_state");
     }
 
     const clientId = process.env.AUTH_GOOGLE_ID;
     const clientSecret = process.env.AUTH_GOOGLE_SECRET;
-    if (!clientId || !clientSecret) return redirectWithFlash(req, "not_configured");
+    if (!clientId || !clientSecret) return redirectWithFlash(origin, "not_configured");
 
-    const hdrs = await headers();
     const redirectUri = getLinkGoogleRedirectUri(hdrs, req.url);
 
     const body = new URLSearchParams({
@@ -88,27 +89,43 @@ export async function GET(req: Request) {
     const tokens = (await tokenRes.json()) as TokenResponse;
     if (!tokenRes.ok || tokens.error) {
       console.warn("[link-google] token exchange failed", tokens.error, tokens.error_description);
-      return redirectWithFlash(req, "token_failed");
+      return redirectWithFlash(origin, "token_failed");
     }
 
     const idToken = tokens.id_token;
-    if (!idToken) return redirectWithFlash(req, "no_id_token");
+    if (!idToken) return redirectWithFlash(origin, "no_id_token");
     const claims = decodeIdToken(idToken);
-    if (!claims?.sub) return redirectWithFlash(req, "no_subject");
+    if (!claims?.sub) return redirectWithFlash(origin, "no_subject");
 
-    // Reject linking a Google account that's already attached to a DIFFERENT
-    // app user — otherwise we'd silently merge two households.
     const existing = await db
       .select()
       .from(accounts)
       .where(and(eq(accounts.provider, "google"), eq(accounts.providerAccountId, claims.sub)))
       .limit(1);
-    if (existing[0] && existing[0].userId !== ctx.userId) {
-      return redirectWithFlash(req, "in_use");
-    }
-    // If it's already linked to THIS user, nothing to do.
+    // Already linked to THIS user — no-op.
     if (existing[0] && existing[0].userId === ctx.userId) {
-      return redirectWithFlash(req, "already");
+      return redirectWithFlash(origin, "already");
+    }
+    // Linked to a DIFFERENT user: only safe to reclaim if that other user is
+    // an orphan (no household memberships). Common case: the user briefly
+    // signed in with this Google account before finishing onboarding, which
+    // left a dangling user row. We delete the orphan + its cascade children
+    // and reassign the account. If the other user *does* have memberships,
+    // we refuse — collapsing two real users would wipe out their data.
+    if (existing[0] && existing[0].userId !== ctx.userId) {
+      const otherUserId = existing[0].userId;
+      const otherMemberships = await db
+        .select({ userId: householdMembers.userId })
+        .from(householdMembers)
+        .where(eq(householdMembers.userId, otherUserId))
+        .limit(1);
+      if (otherMemberships.length > 0) {
+        return redirectWithFlash(origin, "in_use");
+      }
+      // Reclaim: delete orphan user (cascades to accounts + sessions).
+      // Safer than an UPDATE because the orphan might have other stale rows.
+      await db.delete(sessions).where(eq(sessions.userId, otherUserId));
+      await db.delete(users).where(eq(users.id, otherUserId));
     }
 
     await db.insert(accounts).values({
@@ -124,12 +141,12 @@ export async function GET(req: Request) {
       id_token: idToken,
     });
 
-    return redirectWithFlash(req, "ok");
+    return redirectWithFlash(origin, "ok");
   } catch (e) {
     if (e instanceof UnauthorizedError) {
-      return NextResponse.redirect(new URL("/signin", req.url));
+      return NextResponse.redirect(`${origin}/signin`);
     }
     console.error("link-google callback failed", e);
-    return redirectWithFlash(req, "error");
+    return redirectWithFlash(origin, "error");
   }
 }
