@@ -48,17 +48,19 @@ export class ICloudAlbumError extends Error {
 }
 
 /**
- * Extract the token from a shared album URL. Accepts both legacy and modern
- * forms:
- *   https://www.icloud.com/sharedalbum/#B0XXXXX
- *   https://share.icloud.com/photos/0XXXXX
- *   B0XXXXX (bare token)
+ * Extract the token from a shared album URL. Accepts the three forms Apple
+ * has shipped over the years:
+ *   https://www.icloud.com/sharedalbum/#B0XXXXX       (legacy, hash)
+ *   https://share.icloud.com/photos/0XXXXX            (modern, path)
+ *   https://share.icloud.com/photos/#0XXXXX           (rare, hash)
+ *   B0XXXXX                                           (bare token paste)
  */
 export function parseAlbumToken(input: string): string | null {
   const s = input.trim();
   if (!s) return null;
-  // Bare token: alphanumeric, 10-40 chars
-  if (/^[A-Za-z0-9_-]{6,80}$/.test(s)) return s;
+  const tokenRe = /^[A-Za-z0-9_-]{6,80}$/;
+  // Bare token paste
+  if (tokenRe.test(s)) return s;
   let url: URL;
   try {
     url = new URL(s);
@@ -66,14 +68,19 @@ export function parseAlbumToken(input: string): string | null {
     return null;
   }
   if (!url.hostname.endsWith("icloud.com")) return null;
-  // #TOKEN form
+  // Prefer the hash when present — that's the "canonical" album id in the
+  // legacy URL form. Fall back to the last path segment for modern URLs
+  // (share.icloud.com/photos/TOKEN).
   if (url.hash && url.hash.length > 1) {
-    const t = url.hash.slice(1);
-    if (/^[A-Za-z0-9_-]{6,80}$/.test(t)) return t;
+    const t = url.hash.replace(/^#/, "");
+    if (tokenRe.test(t)) return t;
   }
-  // /photos/TOKEN or /sharedalbum/TOKEN path form
-  const last = url.pathname.split("/").filter(Boolean).pop();
-  if (last && /^[A-Za-z0-9_-]{6,80}$/.test(last)) return last;
+  const segments = url.pathname.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i];
+    if (seg === "sharedalbum" || seg === "photos") continue;
+    if (tokenRe.test(seg)) return seg;
+  }
   return null;
 }
 
@@ -102,12 +109,14 @@ async function postJson(
 
 /**
  * Resolve the partition base URL for a token. Returns something like
- *   https://p123-sharedstreams.icloud.com/<token>/sharedstreams/
+ *   https://p42-sharedstreams.icloud.com/<token>/sharedstreams/
  *
  * iCloud returns HTTP 330 with {"X-Apple-MMe-Host": "..."} telling us the
- * correct host. Start with an arbitrary partition and follow one redirect.
+ * correct host when the album lives on a different partition. Start with a
+ * partition known to exist (so we either get 200 or a 330 redirect, never
+ * an outright 404 that'd have us giving up early).
  */
-export async function resolveBaseUrl(token: string, seedPartition = 123): Promise<string> {
+export async function resolveBaseUrl(token: string, seedPartition = 23): Promise<string> {
   const build = (part: number) =>
     `https://p${part.toString().padStart(2, "0")}-sharedstreams.icloud.com/${token}/sharedstreams/`;
 
@@ -124,8 +133,11 @@ export async function resolveBaseUrl(token: string, seedPartition = 123): Promis
         return { ok: false as const, next: `https://${redirectHost}/${token}/sharedstreams/` };
       }
     }
+    // 400/403/404 here means the token itself isn't recognised. 500/502
+    // are usually transient but still not something a retry against the
+    // same partition will fix. Surface the status for debugging.
     throw new ICloudAlbumError(
-      `iCloud responded ${status} (album token may be invalid or revoked)`
+      `iCloud returned ${status} for token — the album may be private, expired, or the link needs to be re-copied.`
     );
   };
 

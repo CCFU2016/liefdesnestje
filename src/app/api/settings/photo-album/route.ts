@@ -56,6 +56,10 @@ export async function PUT(req: Request) {
       streamName = ws.streamName;
       photoCount = ws.photos.length;
     } catch (e) {
+      console.warn(
+        "[photo-album] iCloud probe failed",
+        { token, url: body.data.shareUrl, error: e instanceof Error ? e.message : String(e) }
+      );
       const msg = e instanceof ICloudAlbumError ? e.message : "Couldn't reach the album.";
       return NextResponse.json(
         { error: `${msg} Make sure the album is shared with a public link.` },
