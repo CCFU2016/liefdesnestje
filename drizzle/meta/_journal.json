@@ -78,6 +78,13 @@
       "when": 1778459300000,
       "tag": "0010_photo_of_the_day",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778459400000,
+      "tag": "0011_photo_location",
+      "breakpoints": true
     }
   ]
 }

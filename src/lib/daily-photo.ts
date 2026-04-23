@@ -10,6 +10,7 @@ import {
   ICloudAlbumError,
   resolveBaseUrl,
 } from "@/lib/icloud-shared-album";
+import { extractGps, reverseGeocode } from "@/lib/photo-location";
 
 // Reused from the upload lib's image MIMEs. We accept HEIC-rendered JPEGs.
 const ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
@@ -189,6 +190,26 @@ export async function getOrPickDailyPhoto(
     .trim() || null;
   const takenAt = picked.dateCreated ? new Date(picked.dateCreated) : null;
 
+  // Best-effort location. EXIF GPS is usually stripped from shared-album
+  // derivatives, but not always — if we find it, reverse-geocode so the
+  // card shows "Amsterdam" rather than raw coords.
+  let latitude: string | null = null;
+  let longitude: string | null = null;
+  let locationName: string | null = null;
+  try {
+    const gps = await extractGps(bytes);
+    if (gps) {
+      latitude = gps.latitude.toString();
+      longitude = gps.longitude.toString();
+      locationName = await reverseGeocode(gps.latitude, gps.longitude);
+      console.log("[daily-photo] location", locationName ?? `(${latitude},${longitude})`);
+    } else {
+      console.log("[daily-photo] no GPS EXIF on this derivative");
+    }
+  } catch (e) {
+    console.warn("[daily-photo] location lookup skipped", e instanceof Error ? e.message : String(e));
+  }
+
   // Atomic upsert — another concurrent request could have beaten us to this
   // date; in that case we take the losing row and discard our download.
   const [row] = await db
@@ -202,6 +223,9 @@ export async function getOrPickDailyPhoto(
       caption: picked.caption,
       contributorName: contributor,
       takenAt: takenAt && !Number.isNaN(takenAt.getTime()) ? takenAt : null,
+      latitude,
+      longitude,
+      locationName,
     })
     .onConflictDoNothing()
     .returning();

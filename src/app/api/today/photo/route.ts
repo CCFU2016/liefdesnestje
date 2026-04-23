@@ -24,6 +24,9 @@ export async function GET() {
           contributor: photo.contributorName,
           takenAt: photo.takenAt,
           date: photo.date,
+          locationName: photo.locationName,
+          latitude: photo.latitude,
+          longitude: photo.longitude,
         },
       },
       { headers: NO_STORE }

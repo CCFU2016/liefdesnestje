@@ -493,6 +493,11 @@ export const photoOfTheDay = pgTable(
     caption: text("caption"),
     contributorName: text("contributor_name"),
     takenAt: timestamp("taken_at", { withTimezone: true }),
+    // GPS + reverse-geocoded name, both optional. Apple strips EXIF GPS
+    // from most shared-album derivatives, so these will usually be null.
+    latitude: text("latitude"), // stored as text to dodge float rounding
+    longitude: text("longitude"),
+    locationName: text("location_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
