@@ -220,6 +220,11 @@ export async function fetchAssetUrls(
   if (status !== 200) {
     throw new ICloudAlbumError(`webasseturls responded ${status}`);
   }
+  // Dump the raw response shape until we understand what Apple is sending.
+  // Truncate to a few hundred chars so we don't spam logs with mega-strings.
+  const rawStr = JSON.stringify(body ?? {}).slice(0, 600);
+  console.log("[icloud] webasseturls raw:", rawStr);
+
   const raw = body as {
     items?: Record<
       string,
@@ -229,9 +234,6 @@ export async function fetchAssetUrls(
   };
   const items = raw.items ?? {};
   const locations = raw.locations ?? {};
-  // Invert: we want per-photoGuid, map checksum → url.
-  // That's actually returned in the webstream already (derivatives store
-  // checksums). Here we return a map keyed by checksum → absolute URL.
   const checksumToUrl: Record<string, string> = {};
   for (const [checksum, item] of Object.entries(items)) {
     if (!item.url_location || !item.url_path) continue;
@@ -240,9 +242,6 @@ export async function fetchAssetUrls(
     const scheme = loc.scheme ?? "https";
     checksumToUrl[checksum] = `${scheme}://${loc.hostname}${item.url_path}`;
   }
-  // The caller has the derivatives map per photo — we return { guid: { checksum: url } }
-  // but since Apple returns a flat items map, we just return {flat: checksumToUrl}.
-  // Caller uses pickBestDerivative() to choose the right checksum.
   return { _flat: checksumToUrl };
 }
 

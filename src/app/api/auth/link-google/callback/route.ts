@@ -73,12 +73,16 @@ export async function GET(req: Request) {
     const expected = jar.get(NONCE_COOKIE)?.value;
     jar.delete(NONCE_COOKIE);
     if (!expected || expected !== nonce || stateUserId !== ctx.userId) {
+      console.warn("[link-google] bad_state — expectedCookie?", !!expected, "nonceMatch?", expected === nonce, "userMatch?", stateUserId === ctx.userId);
       return redirectWithFlash(origin, "bad_state");
     }
 
     const clientId = process.env.AUTH_GOOGLE_ID;
     const clientSecret = process.env.AUTH_GOOGLE_SECRET;
-    if (!clientId || !clientSecret) return redirectWithFlash(origin, "not_configured");
+    if (!clientId || !clientSecret) {
+      console.warn("[link-google] not_configured — missing AUTH_GOOGLE_ID or AUTH_GOOGLE_SECRET");
+      return redirectWithFlash(origin, "not_configured");
+    }
 
     const redirectUri = getLinkGoogleRedirectUri(hdrs, req.url);
 
@@ -101,25 +105,27 @@ export async function GET(req: Request) {
     }
 
     const idToken = tokens.id_token;
-    if (!idToken) return redirectWithFlash(origin, "no_id_token");
+    if (!idToken) {
+      console.warn("[link-google] no_id_token in token response");
+      return redirectWithFlash(origin, "no_id_token");
+    }
     const claims = decodeIdToken(idToken);
-    if (!claims?.sub) return redirectWithFlash(origin, "no_subject");
+    if (!claims?.sub) {
+      console.warn("[link-google] no_subject in id_token claims");
+      return redirectWithFlash(origin, "no_subject");
+    }
+    console.log("[link-google] got claims for sub", claims.sub, "email", claims.email);
 
     const existing = await db
       .select()
       .from(accounts)
       .where(and(eq(accounts.provider, "google"), eq(accounts.providerAccountId, claims.sub)))
       .limit(1);
-    // Already linked to THIS user — no-op.
+    console.log("[link-google] existing account row?", existing.length > 0, "userId:", existing[0]?.userId);
     if (existing[0] && existing[0].userId === ctx.userId) {
+      console.log("[link-google] already linked to this user — no-op");
       return redirectWithFlash(origin, "already");
     }
-    // Linked to a DIFFERENT user: only safe to reclaim if that other user is
-    // an orphan (no household memberships). Common case: the user briefly
-    // signed in with this Google account before finishing onboarding, which
-    // left a dangling user row. We delete the orphan + its cascade children
-    // and reassign the account. If the other user *does* have memberships,
-    // we refuse — collapsing two real users would wipe out their data.
     if (existing[0] && existing[0].userId !== ctx.userId) {
       const otherUserId = existing[0].userId;
       const otherMemberships = await db
@@ -127,11 +133,12 @@ export async function GET(req: Request) {
         .from(householdMembers)
         .where(eq(householdMembers.userId, otherUserId))
         .limit(1);
+      console.log("[link-google] account belongs to other user", otherUserId, "memberships:", otherMemberships.length);
       if (otherMemberships.length > 0) {
+        console.warn("[link-google] in_use — refusing to merge real users");
         return redirectWithFlash(origin, "in_use");
       }
-      // Reclaim: delete orphan user (cascades to accounts + sessions).
-      // Safer than an UPDATE because the orphan might have other stale rows.
+      console.log("[link-google] reclaiming orphan user", otherUserId);
       await db.delete(sessions).where(eq(sessions.userId, otherUserId));
       await db.delete(users).where(eq(users.id, otherUserId));
     }
