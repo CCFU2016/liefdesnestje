@@ -1036,6 +1036,7 @@ function LinkedAccountsEditor() {
   );
   const linked = data?.accounts ?? [];
   const [justLinked, setJustLinked] = useState(false);
+  const [conflict, setConflict] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1057,10 +1058,7 @@ function LinkedAccountsEditor() {
         setJustLinked(true);
         break;
       case "in_use":
-        toast.error(
-          "That Google account is already attached to another profile with household data. Ask the other profile's owner to disconnect it first.",
-          { duration: 7000 }
-        );
+        setConflict(true);
         break;
       case "bad_state":
         toast.error("Couldn't verify the link request — try again.");
@@ -1107,6 +1105,38 @@ function LinkedAccountsEditor() {
       {justLinked && (
         <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
           ✓ Linking completed. You can now sign in with any Google account listed below.
+        </div>
+      )}
+
+      {conflict && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="font-medium">That Google account already owns a separate profile.</div>
+          <p className="mt-1">
+            It&apos;s currently attached to a different user with household data. You can link it
+            anyway — but doing so will <strong>permanently delete that other profile</strong> and
+            everything it owns (calendars, todos, recipes, etc.).
+          </p>
+          <div className="mt-2 flex gap-2">
+            <a
+              href="/api/auth/link-google?force=1"
+              onClick={(e) => {
+                if (
+                  !confirm(
+                    "This will permanently delete the other profile that owns this Google account, including any households, events, and recipes attached to it. Continue?"
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+                Yes, replace the other profile
+              </Button>
+            </a>
+            <Button size="sm" variant="ghost" onClick={() => setConflict(false)}>
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 

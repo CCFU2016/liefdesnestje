@@ -230,7 +230,14 @@ export async function fetchAssetUrls(
       string,
       { url_expiry?: string; url_location?: string; url_path?: string }
     >;
-    locations?: Record<string, { hostname?: string; scheme?: string }>;
+    // Current Apple response uses { hosts: [...] }; older docs reference
+    // a single { hostname }. Support both, and fall back to using the
+    // url_location key itself as the hostname (which is what current
+    // responses look like — locations are keyed by hostname directly).
+    locations?: Record<
+      string,
+      { hostname?: string; hosts?: string[]; scheme?: string }
+    >;
   };
   const items = raw.items ?? {};
   const locations = raw.locations ?? {};
@@ -238,9 +245,10 @@ export async function fetchAssetUrls(
   for (const [checksum, item] of Object.entries(items)) {
     if (!item.url_location || !item.url_path) continue;
     const loc = locations[item.url_location];
-    if (!loc?.hostname) continue;
-    const scheme = loc.scheme ?? "https";
-    checksumToUrl[checksum] = `${scheme}://${loc.hostname}${item.url_path}`;
+    const host = loc?.hosts?.[0] ?? loc?.hostname ?? item.url_location;
+    if (!host) continue;
+    const scheme = loc?.scheme ?? "https";
+    checksumToUrl[checksum] = `${scheme}://${host}${item.url_path}`;
   }
   return { _flat: checksumToUrl };
 }

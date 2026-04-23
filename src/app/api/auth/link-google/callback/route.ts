@@ -68,7 +68,20 @@ export async function GET(req: Request) {
     }
 
     // Verify state matches the cookie nonce AND encodes the current user.
-    const [stateUserId, nonce] = state.split(".", 2);
+    // State format: "<userId>.<S|F>.<nonce>" — F means "force-replace any
+    // conflicting other profile" (set explicitly via ?force=1 on initiate).
+    // Older state values (without flag, just "<userId>.<nonce>") are still
+    // accepted with force=false for backward compat across deploys.
+    const stateParts = state.split(".");
+    let stateUserId: string;
+    let force = false;
+    let nonce: string;
+    if (stateParts.length === 3) {
+      [stateUserId, , nonce] = stateParts;
+      force = stateParts[1] === "F";
+    } else {
+      [stateUserId, nonce] = stateParts;
+    }
     const jar = await cookies();
     const expected = jar.get(NONCE_COOKIE)?.value;
     jar.delete(NONCE_COOKIE);
@@ -76,6 +89,7 @@ export async function GET(req: Request) {
       console.warn("[link-google] bad_state — expectedCookie?", !!expected, "nonceMatch?", expected === nonce, "userMatch?", stateUserId === ctx.userId);
       return redirectWithFlash(origin, "bad_state");
     }
+    console.log("[link-google] state ok, force=", force);
 
     const clientId = process.env.AUTH_GOOGLE_ID;
     const clientSecret = process.env.AUTH_GOOGLE_SECRET;
@@ -134,11 +148,17 @@ export async function GET(req: Request) {
         .where(eq(householdMembers.userId, otherUserId))
         .limit(1);
       console.log("[link-google] account belongs to other user", otherUserId, "memberships:", otherMemberships.length);
-      if (otherMemberships.length > 0) {
-        console.warn("[link-google] in_use — refusing to merge real users");
+      if (otherMemberships.length > 0 && !force) {
+        console.warn("[link-google] in_use — refusing to merge real users (no force flag)");
         return redirectWithFlash(origin, "in_use");
       }
-      console.log("[link-google] reclaiming orphan user", otherUserId);
+      if (force && otherMemberships.length > 0) {
+        console.warn("[link-google] FORCE replacing other user", otherUserId, "with", ctx.userId);
+      } else {
+        console.log("[link-google] reclaiming orphan user", otherUserId);
+      }
+      // Delete the other user (cascades to their accounts, sessions,
+      // household memberships, and any other rows FK'd to users.id).
       await db.delete(sessions).where(eq(sessions.userId, otherUserId));
       await db.delete(users).where(eq(users.id, otherUserId));
     }

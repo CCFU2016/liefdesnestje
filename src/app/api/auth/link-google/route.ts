@@ -40,7 +40,11 @@ export async function GET(req: Request) {
     // an attacker can't forge a callback that attaches a Google identity to
     // the victim's user.
     const nonce = randomBytes(24).toString("base64url");
-    const state = `${ctx.userId}.${nonce}`;
+    // ?force=1 lets the user opt into deleting another profile that already
+    // owns the Google account they're trying to link. Carried through state
+    // so the callback can act on it.
+    const force = urlObj.searchParams.get("force") === "1";
+    const state = `${ctx.userId}.${force ? "F" : "S"}.${nonce}`;
 
     const jar = await cookies();
     jar.set(NONCE_COOKIE, nonce, {
