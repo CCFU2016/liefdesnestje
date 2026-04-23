@@ -1035,6 +1035,7 @@ function LinkedAccountsEditor() {
     fetcher
   );
   const linked = data?.accounts ?? [];
+  const [justLinked, setJustLinked] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1048,10 +1049,12 @@ function LinkedAccountsEditor() {
     switch (flash) {
       case "ok":
         toast.success("Linked the second Google account. Sign in with either from now on.");
+        setJustLinked(true);
         mutate();
         break;
       case "already":
         toast.info("That Google account was already linked.");
+        setJustLinked(true);
         break;
       case "in_use":
         toast.error(
@@ -1100,11 +1103,22 @@ function LinkedAccountsEditor() {
         Link a second Google account (e.g. personal + work) so either one can sign in to the same
         profile. All linked accounts grant full access — only add accounts you control.
       </p>
+
+      {justLinked && (
+        <div className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          ✓ Linking completed. You can now sign in with any Google account listed below.
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-sm text-zinc-500">Loading…</div>
       ) : (
-        <ul className="space-y-2">
-          {linked.map((a) => (
+        <>
+          <div className="text-xs text-zinc-500">
+            {linked.length} Google account{linked.length === 1 ? "" : "s"} connected
+          </div>
+          <ul className="space-y-2">
+            {linked.map((a) => (
             <li
               key={a.providerAccountId}
               className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-sm dark:border-zinc-800"
@@ -1127,7 +1141,8 @@ function LinkedAccountsEditor() {
               </Button>
             </li>
           ))}
-        </ul>
+          </ul>
+        </>
       )}
       <div>
         <a href="/api/auth/link-google">

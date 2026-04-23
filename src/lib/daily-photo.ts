@@ -8,7 +8,6 @@ import {
   fetchAssetUrls,
   fetchWebstream,
   ICloudAlbumError,
-  pickBestDerivative,
   resolveBaseUrl,
 } from "@/lib/icloud-shared-album";
 
@@ -114,24 +113,45 @@ export async function getOrPickDailyPhoto(
   if (pool.length === 0) pool = images; // fall back to full set if we've seen them all
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
-  const derivative = pickBestDerivative(picked);
-  if (!derivative) {
-    console.warn("[daily-photo] no usable derivative for", picked.photoGuid);
-    return fallback();
-  }
 
-  // Resolve the signed URL for just this one checksum.
-  let assetUrl: string | undefined;
+  // Apple's webasseturls response only contains URLs for a subset of a
+  // photo's derivatives (the subset varies by photo). We fetch the URL
+  // bundle first, then pick the best derivative *that actually has a URL*,
+  // rather than picking a derivative up-front and hoping its URL is there.
   let bytes: Uint8Array;
   let mime: string;
   try {
     const urlBundle = await fetchAssetUrls(baseUrl, [picked.photoGuid]);
-    assetUrl = urlBundle._flat?.[derivative.checksum];
-    if (!assetUrl) {
-      console.warn("[daily-photo] no signed url for checksum", derivative.checksum);
+    const availableUrls = urlBundle._flat ?? {};
+    const available = Object.entries(picked.derivatives)
+      .filter(([label]) => label !== "PosterFrame" && !isNaN(parseInt(label, 10)))
+      .filter(([, d]) => !!availableUrls[d.checksum])
+      .map(([label, d]) => ({
+        label,
+        checksum: d.checksum,
+        width: d.width,
+        height: d.height,
+        url: availableUrls[d.checksum]!,
+      }))
+      .sort((a, b) => b.width - a.width);
+
+    if (available.length === 0) {
+      console.warn(
+        "[daily-photo] no derivative URL matched for guid",
+        picked.photoGuid,
+        "derivatives:",
+        Object.keys(picked.derivatives),
+        "urls:",
+        Object.keys(availableUrls)
+      );
       return fallback();
     }
-    const downloaded = await downloadAsset(assetUrl);
+
+    // Prefer widest <= 2048, else smallest available (still real).
+    const under = available.find((c) => c.width <= 2048);
+    const chosen = under ?? available[available.length - 1];
+
+    const downloaded = await downloadAsset(chosen.url);
     bytes = downloaded.bytes;
     mime = downloaded.mime;
   } catch (e) {
