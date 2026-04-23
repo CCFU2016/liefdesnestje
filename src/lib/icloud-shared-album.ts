@@ -112,42 +112,49 @@ async function postJson(
  *   https://p42-sharedstreams.icloud.com/<token>/sharedstreams/
  *
  * iCloud returns HTTP 330 with {"X-Apple-MMe-Host": "..."} telling us the
- * correct host when the album lives on a different partition. Start with a
- * partition known to exist (so we either get 200 or a 330 redirect, never
- * an outright 404 that'd have us giving up early).
+ * correct host when the album lives on a different partition. We try a small
+ * list of known-good seeds: any of them responds with either 200 (we landed
+ * on the right one) or 330 (redirect to the right one). If all seeds 404,
+ * the token is dead.
  */
-export async function resolveBaseUrl(token: string, seedPartition = 23): Promise<string> {
+const SEED_PARTITIONS = [4, 23, 42, 123, 50, 70, 100] as const;
+
+export async function resolveBaseUrl(token: string): Promise<string> {
   const build = (part: number) =>
     `https://p${part.toString().padStart(2, "0")}-sharedstreams.icloud.com/${token}/sharedstreams/`;
 
-  const tryAt = async (base: string) => {
+  const tryAt = async (base: string): Promise<{ ok: true; base: string } | { ok: false; next: string } | { ok: false; dead: true; status: number }> => {
     const { status, body, headers } = await postJson(`${base}webstream`, {
       streamCtag: null,
     });
-    if (status === 200) return { ok: true as const, base };
+    if (status === 200) return { ok: true, base };
     if (status === 330) {
       const redirectHost =
         ((body as { "X-Apple-MMe-Host"?: string } | null)?.["X-Apple-MMe-Host"]) ??
         headers.get("x-apple-mme-host");
       if (redirectHost) {
-        return { ok: false as const, next: `https://${redirectHost}/${token}/sharedstreams/` };
+        return { ok: false, next: `https://${redirectHost}/${token}/sharedstreams/` };
       }
     }
-    // 400/403/404 here means the token itself isn't recognised. 500/502
-    // are usually transient but still not something a retry against the
-    // same partition will fix. Surface the status for debugging.
-    throw new ICloudAlbumError(
-      `iCloud returned ${status} for token — the album may be private, expired, or the link needs to be re-copied.`
-    );
+    return { ok: false, dead: true, status };
   };
 
-  let base = build(seedPartition);
-  for (let hop = 0; hop < 3; hop++) {
-    const r = await tryAt(base);
-    if (r.ok) return r.base;
-    base = r.next;
+  let lastStatus = 0;
+  for (const seed of SEED_PARTITIONS) {
+    let base = build(seed);
+    for (let hop = 0; hop < 3; hop++) {
+      const r = await tryAt(base);
+      if ("dead" in r) {
+        lastStatus = r.status;
+        break; // try next seed
+      }
+      if (r.ok) return r.base;
+      base = r.next;
+    }
   }
-  throw new ICloudAlbumError("Too many partition redirects from iCloud");
+  throw new ICloudAlbumError(
+    `iCloud returned ${lastStatus || "no-usable-status"} for every partition seed — the album may be private, expired, or the link needs to be re-copied.`
+  );
 }
 
 /** Fetch the full webstream (photo list). Includes all derivatives metadata. */

@@ -46,12 +46,25 @@ export async function getOrPickDailyPhoto(
     .limit(1);
   if (!album) return null;
 
+  // Fallback used when anything downstream throws — keep the most recent
+  // successful pick visible so the card never vanishes silently on a
+  // transient iCloud hiccup.
+  const fallback = async () => {
+    const [prev] = await db
+      .select()
+      .from(photoOfTheDay)
+      .where(eq(photoOfTheDay.householdId, householdId))
+      .orderBy(desc(photoOfTheDay.date))
+      .limit(1);
+    return prev ?? null;
+  };
+
   // Fetch the album's photo list, resolving the partition if we don't have
   // one cached yet or if the old one 330s.
   let baseUrl = album.baseUrl;
+  let webstream: Awaited<ReturnType<typeof fetchWebstream>>;
   try {
     if (!baseUrl) baseUrl = await resolveBaseUrl(album.albumToken);
-    var webstream;
     try {
       webstream = await fetchWebstream(baseUrl);
     } catch (e) {
@@ -64,14 +77,13 @@ export async function getOrPickDailyPhoto(
       }
     }
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[daily-photo] iCloud fetch failed for household", householdId, msg);
     await db
       .update(householdPhotoAlbums)
-      .set({
-        lastError: e instanceof Error ? e.message : String(e),
-        updatedAt: new Date(),
-      })
+      .set({ lastError: msg, updatedAt: new Date() })
       .where(eq(householdPhotoAlbums.householdId, householdId));
-    return null;
+    return fallback();
   }
 
   // Only still-images — skip videos (we'd need poster frame download path).
@@ -103,14 +115,29 @@ export async function getOrPickDailyPhoto(
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
   const derivative = pickBestDerivative(picked);
-  if (!derivative) return null;
+  if (!derivative) {
+    console.warn("[daily-photo] no usable derivative for", picked.photoGuid);
+    return fallback();
+  }
 
   // Resolve the signed URL for just this one checksum.
-  const urlBundle = await fetchAssetUrls(baseUrl, [picked.photoGuid]);
-  const assetUrl = urlBundle._flat?.[derivative.checksum];
-  if (!assetUrl) return null;
-
-  const { bytes, mime } = await downloadAsset(assetUrl);
+  let assetUrl: string | undefined;
+  let bytes: Uint8Array;
+  let mime: string;
+  try {
+    const urlBundle = await fetchAssetUrls(baseUrl, [picked.photoGuid]);
+    assetUrl = urlBundle._flat?.[derivative.checksum];
+    if (!assetUrl) {
+      console.warn("[daily-photo] no signed url for checksum", derivative.checksum);
+      return fallback();
+    }
+    const downloaded = await downloadAsset(assetUrl);
+    bytes = downloaded.bytes;
+    mime = downloaded.mime;
+  } catch (e) {
+    console.warn("[daily-photo] asset download failed", e instanceof Error ? e.message : String(e));
+    return fallback();
+  }
   const safeMime = (ALLOWED_IMAGE_MIMES as readonly string[]).includes(mime)
     ? mime
     : "image/jpeg";
