@@ -12,19 +12,26 @@ import {
   todos,
   todoLists,
 } from "@/lib/db/schema";
-import { and, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm";
 import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
+import { DayNav } from "./day-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { differenceInCalendarDays, endOfDay, format, startOfDay } from "date-fns";
+import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>;
+}) {
   const ctx = await requireHouseholdMember();
 
-  const now = new Date();
-  const dayStart = startOfDay(now);
-  const dayEnd = endOfDay(now);
-  const today = toDateStr(now);
+  const { date: dateParam } = await searchParams;
+  const dayDate = parseDateParam(dateParam) ?? new Date();
+  const dayStart = startOfDay(dayDate);
+  const dayEnd = endOfDay(dayDate);
+  const today = toDateStr(dayDate);
+  const viewingToday = isTodayFn(dayDate);
 
   const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences, nikiWorkRaw] = await Promise.all([
     db
@@ -87,8 +94,12 @@ export default async function TodayPage() {
     // Niki's work status — separate query so it fires regardless of whether
     // the "Niki werk" calendar is toggled on the Today widget (user may hide
     // the raw events but still want the status chip).
+    //
+    // Fetch all matches (Office NL + Telework may both be in the DB if the
+    // user edited one into the other but the prior event didn't get
+    // tombstoned) and let the post-filter pick the freshest by updatedAt.
     db
-      .select({ title: events.title })
+      .select({ title: events.title, updatedAt: events.updatedAt, startsAt: events.startsAt })
       .from(events)
       .leftJoin(calendars, eq(events.calendarId, calendars.id))
       .where(
@@ -102,7 +113,7 @@ export default async function TodayPage() {
           or(ilike(events.title, "office nl"), ilike(events.title, "telework"))
         )
       )
-      .limit(1),
+      .orderBy(desc(events.updatedAt)),
   ]);
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
@@ -134,7 +145,16 @@ export default async function TodayPage() {
     .map((a) => memberByUserId.get(a.userId))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
-  const nikiWorkTitle = nikiWorkRaw[0]?.title?.toLowerCase() ?? null;
+  // Pick the freshest all-day event that actually overlaps today's local
+  // window. The DB range filter can drag in a neighbouring day's all-day
+  // event because UTC midnight boundaries drift across zones — the post-
+  // filter checks the event's date against `today` (YYYY-MM-DD) directly.
+  const nikiWorkToday = nikiWorkRaw.find((r) => {
+    const s = new Date(r.startsAt);
+    const ymd = `${s.getUTCFullYear()}-${String(s.getUTCMonth() + 1).padStart(2, "0")}-${String(s.getUTCDate()).padStart(2, "0")}`;
+    return ymd === today;
+  }) ?? nikiWorkRaw[0];
+  const nikiWorkTitle = nikiWorkToday?.title?.toLowerCase() ?? null;
   const nikiWorkLabel =
     nikiWorkTitle === "office nl"
       ? "Niki op kantoor"
@@ -159,12 +179,25 @@ export default async function TodayPage() {
         .limit(5)
     : [];
 
+  const prevDate = toDateStr(addDays(dayDate, -1));
+  const nextDate = toDateStr(addDays(dayDate, 1));
+
   return (
     <div className="mx-auto max-w-5xl p-6 md:p-10">
       <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-        {greet()} — {format(now, "EEEE, d MMMM")}
+        {viewingToday ? (
+          <>
+            {greet()} — {format(dayDate, "EEEE, d MMMM")}
+          </>
+        ) : (
+          format(dayDate, "EEEE, d MMMM yyyy")
+        )}
       </h1>
-      <p className="text-sm text-zinc-500 mt-1">Here&apos;s what&apos;s on your plate.</p>
+      <p className="text-sm text-zinc-500 mt-1">
+        {viewingToday ? "Here's what's on your plate." : "Browsing another day."}
+      </p>
+
+      <DayNav prevDate={prevDate} nextDate={nextDate} showTodayLink={!viewingToday} />
 
       {nikiWorkLabel && (
         <div className="mt-3">
@@ -178,12 +211,12 @@ export default async function TodayPage() {
       <div className="grid gap-4 mt-8 md:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Today</CardTitle>
+            <CardTitle>{viewingToday ? "Today" : format(dayDate, "EEE, d MMM")}</CardTitle>
             <Link href="/calendar" className="text-xs text-zinc-500 hover:underline">Open calendar</Link>
           </CardHeader>
           <CardContent>
             {todayEvents.length === 0 ? (
-              <p className="text-sm text-zinc-500">Nothing on the calendar today.</p>
+              <p className="text-sm text-zinc-500">Nothing on the calendar {viewingToday ? "today" : "that day"}.</p>
             ) : (
               <ul className="space-y-2">
                 {todayEvents.map((e) => (
@@ -209,7 +242,7 @@ export default async function TodayPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Tonight&apos;s dinner</CardTitle>
+            <CardTitle>{viewingToday ? "Tonight's dinner" : `Dinner · ${format(dayDate, "d MMM")}`}</CardTitle>
             <Link href="/meals" className="text-xs text-zinc-500 hover:underline">Open meals</Link>
           </CardHeader>
           <CardContent>
@@ -287,13 +320,15 @@ export default async function TodayPage() {
           </CardContent>
         </Card>
 
-        <DinnerWeeklyPrompt
-          members={members.map((m) => ({
-            userId: m.userId,
-            displayName: m.displayName,
-            color: m.color,
-          }))}
-        />
+        {viewingToday && (
+          <DinnerWeeklyPrompt
+            members={members.map((m) => ({
+              userId: m.userId,
+              displayName: m.displayName,
+              color: m.color,
+            }))}
+          />
+        )}
 
         {nextHoliday && (
           <Card>
@@ -312,7 +347,7 @@ export default async function TodayPage() {
                 </div>
                 <div className="text-right shrink-0 ml-3">
                   <div className="text-3xl font-bold">
-                    {differenceInCalendarDays(parseDate(nextHoliday.startsOn), now)}
+                    {differenceInCalendarDays(parseDate(nextHoliday.startsOn), new Date())}
                   </div>
                   <div className="text-xs text-zinc-500">days</div>
                 </div>
@@ -339,4 +374,13 @@ function toDateStr(d: Date): string {
 function parseDate(yyyyMmDd: string): Date {
   const [y, m, d] = yyyyMmDd.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+function parseDateParam(s: string | undefined): Date | null {
+  if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt;
 }
