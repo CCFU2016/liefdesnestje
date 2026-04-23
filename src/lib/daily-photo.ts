@@ -62,19 +62,26 @@ export async function getOrPickDailyPhoto(
   // one cached yet or if the old one 330s.
   let baseUrl = album.baseUrl;
   let webstream: Awaited<ReturnType<typeof fetchWebstream>>;
+  console.log("[daily-photo] starting pick for", householdId, "baseUrl cached?", !!baseUrl);
   try {
-    if (!baseUrl) baseUrl = await resolveBaseUrl(album.albumToken);
+    if (!baseUrl) {
+      console.log("[daily-photo] resolving base url");
+      baseUrl = await resolveBaseUrl(album.albumToken);
+      console.log("[daily-photo] resolved:", baseUrl);
+    }
     try {
+      console.log("[daily-photo] fetching webstream");
       webstream = await fetchWebstream(baseUrl);
     } catch (e) {
       if (e instanceof ICloudAlbumError) {
-        // Re-resolve once in case Apple moved the album between partitions.
+        console.log("[daily-photo] webstream failed, re-resolving:", e.message);
         baseUrl = await resolveBaseUrl(album.albumToken);
         webstream = await fetchWebstream(baseUrl);
       } else {
         throw e;
       }
     }
+    console.log("[daily-photo] webstream ok,", webstream.photos.length, "photos");
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn("[daily-photo] iCloud fetch failed for household", householdId, msg);
@@ -113,6 +120,7 @@ export async function getOrPickDailyPhoto(
   if (pool.length === 0) pool = images; // fall back to full set if we've seen them all
 
   const picked = pool[Math.floor(Math.random() * pool.length)];
+  console.log("[daily-photo] picked guid", picked.photoGuid, "derivs:", Object.keys(picked.derivatives).length);
 
   // Apple's webasseturls response only contains URLs for a subset of a
   // photo's derivatives (the subset varies by photo). We fetch the URL
@@ -121,7 +129,9 @@ export async function getOrPickDailyPhoto(
   let bytes: Uint8Array;
   let mime: string;
   try {
+    console.log("[daily-photo] fetching asset URLs");
     const urlBundle = await fetchAssetUrls(baseUrl, [picked.photoGuid]);
+    console.log("[daily-photo] got", Object.keys(urlBundle._flat ?? {}).length, "signed URLs");
     const availableUrls = urlBundle._flat ?? {};
     const available = Object.entries(picked.derivatives)
       .filter(([label]) => label !== "PosterFrame" && !isNaN(parseInt(label, 10)))
@@ -150,10 +160,12 @@ export async function getOrPickDailyPhoto(
     // Prefer widest <= 2048, else smallest available (still real).
     const under = available.find((c) => c.width <= 2048);
     const chosen = under ?? available[available.length - 1];
+    console.log("[daily-photo] downloading derivative", chosen.label, `${chosen.width}x${chosen.height}`);
 
     const downloaded = await downloadAsset(chosen.url);
     bytes = downloaded.bytes;
     mime = downloaded.mime;
+    console.log("[daily-photo] downloaded", bytes.byteLength, "bytes,", mime);
   } catch (e) {
     console.warn("[daily-photo] asset download failed", e instanceof Error ? e.message : String(e));
     return fallback();
@@ -162,12 +174,14 @@ export async function getOrPickDailyPhoto(
     ? mime
     : "image/jpeg";
   const ext = safeMime === "image/png" ? "png" : safeMime === "image/webp" ? "webp" : "jpg";
+  console.log("[daily-photo] saving to disk");
   const { relPath } = await saveUpload({
     subdir: `daily-photos/${householdId}`,
     filename: `${ymd}.${ext}`,
     bytes,
     mime: safeMime,
   });
+  console.log("[daily-photo] saved at", relPath);
 
   const contributor = [picked.contributorFirstName, picked.contributorLastName]
     .filter(Boolean)

@@ -84,6 +84,11 @@ export function parseAlbumToken(input: string): string | null {
   return null;
 }
 
+// All iCloud requests share a per-call timeout; otherwise a hung request
+// would stall the whole route until Railway's gateway kills it — which
+// prevents any of our console.logs from flushing.
+const ICLOUD_TIMEOUT_MS = 12_000;
+
 async function postJson(
   url: string,
   body: Record<string, unknown>
@@ -96,6 +101,7 @@ async function postJson(
       Accept: "application/json",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(ICLOUD_TIMEOUT_MS),
   });
   const text = await res.text();
   let parsed: unknown = null;
@@ -268,6 +274,7 @@ export function pickBestDerivative(photo: SharedPhoto): {
 export async function downloadAsset(url: string): Promise<{ bytes: Uint8Array; mime: string }> {
   const res = await safeFetch(url, {
     headers: { "User-Agent": DEFAULT_USER_AGENT, Accept: "image/*" },
+    signal: AbortSignal.timeout(ICLOUD_TIMEOUT_MS * 2), // download may take longer
   });
   if (!res.ok) {
     throw new ICloudAlbumError(`asset download ${res.status}`);
