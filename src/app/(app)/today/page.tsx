@@ -12,7 +12,7 @@ import {
   todos,
   todoLists,
 } from "@/lib/db/schema";
-import { and, eq, gte, isNull, lte, or, inArray } from "drizzle-orm";
+import { and, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm";
 import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { differenceInCalendarDays, endOfDay, format, startOfDay } from "date-fns";
@@ -26,7 +26,7 @@ export default async function TodayPage() {
   const dayEnd = endOfDay(now);
   const today = toDateStr(now);
 
-  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences] = await Promise.all([
+  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences, nikiWorkRaw] = await Promise.all([
     db
       .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
@@ -84,6 +84,25 @@ export default async function TodayPage() {
       .where(
         and(eq(dinnerAbsences.householdId, ctx.householdId), eq(dinnerAbsences.date, today))
       ),
+    // Niki's work status — separate query so it fires regardless of whether
+    // the "Niki werk" calendar is toggled on the Today widget (user may hide
+    // the raw events but still want the status chip).
+    db
+      .select({ title: events.title })
+      .from(events)
+      .leftJoin(calendars, eq(events.calendarId, calendars.id))
+      .where(
+        and(
+          eq(events.householdId, ctx.householdId),
+          isNull(events.deletedAt),
+          eq(events.allDay, true),
+          gte(events.endsAt, dayStart),
+          lte(events.startsAt, dayEnd),
+          ilike(calendars.name, "niki werk"),
+          or(ilike(events.title, "office nl"), ilike(events.title, "telework"))
+        )
+      )
+      .limit(1),
   ]);
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
@@ -115,6 +134,14 @@ export default async function TodayPage() {
     .map((a) => memberByUserId.get(a.userId))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
+  const nikiWorkTitle = nikiWorkRaw[0]?.title?.toLowerCase() ?? null;
+  const nikiWorkLabel =
+    nikiWorkTitle === "office nl"
+      ? "Niki op kantoor"
+      : nikiWorkTitle === "telework"
+        ? "Niki thuiswerken"
+        : null;
+
   const listIds = lists.map((l) => l.id);
   const topTodos = listIds.length
     ? await db
@@ -138,6 +165,15 @@ export default async function TodayPage() {
         {greet()} — {format(now, "EEEE, d MMMM")}
       </h1>
       <p className="text-sm text-zinc-500 mt-1">Here&apos;s what&apos;s on your plate.</p>
+
+      {nikiWorkLabel && (
+        <div className="mt-3">
+          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200">
+            <span className="inline-block h-2 w-2 rounded-full bg-indigo-500" />
+            {nikiWorkLabel}
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-4 mt-8 md:grid-cols-2">
         <Card>
