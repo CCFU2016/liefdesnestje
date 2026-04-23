@@ -36,7 +36,7 @@ export default async function TodayPage({
   const today = toDateStr(dayDate);
   const viewingToday = isTodayFn(dayDate);
 
-  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences, todayTravel, nikiWorkRaw] = await Promise.all([
+  const [todayEventsRaw, lists, members, tonightRaw, relevantHolidays, todayAbsences, todayTravel, nikiWorkRaw] = await Promise.all([
     db
       .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
@@ -74,6 +74,9 @@ export default async function TodayPage({
         )
       )
       .limit(1),
+    // "Next event" = the nearest event whose window starts today or later,
+    // AND "ongoing events" that started before today and haven't ended.
+    // We fetch a small window of relevant rows once and split client-side.
     db
       .select()
       .from(holidays)
@@ -81,13 +84,15 @@ export default async function TodayPage({
         and(
           eq(holidays.householdId, ctx.householdId),
           isNull(holidays.deletedAt),
-          gte(holidays.startsOn, today),
-          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId))
+          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId)),
+          or(
+            gte(holidays.startsOn, today),
+            and(lte(holidays.startsOn, today), gte(holidays.endsOn, today))
+          )
         )
       )
       .orderBy(holidays.startsOn)
-      .limit(1)
-      .then((r) => r[0]),
+      .limit(20),
     db
       .select({ userId: dinnerAbsences.userId })
       .from(dinnerAbsences)
@@ -177,6 +182,11 @@ export default async function TodayPage({
   const absentMembers = todayAbsences
     .map((a) => memberByUserId.get(a.userId))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
+
+  const ongoingHolidays = relevantHolidays.filter(
+    (h) => h.startsOn <= today && (h.endsOn ?? h.startsOn) >= today
+  );
+  const nextHoliday = relevantHolidays.find((h) => h.startsOn > today) ?? null;
 
   // Pick the freshest all-day event that actually overlaps today's local
   // window. The DB range filter can drag in a neighbouring day's all-day
@@ -386,12 +396,10 @@ export default async function TodayPage({
                   const travelers = r.travelerUserIds
                     .map((uid) => memberByUserId.get(uid))
                     .filter((m): m is NonNullable<typeof m> => !!m);
-                  const isCheckIn =
-                    sameDayUtc(new Date(r.startAt), dayStart) && r.kind === "hotel";
-                  const isCheckOut =
-                    r.endAt &&
-                    sameDayUtc(new Date(r.endAt), dayStart) &&
-                    r.kind === "hotel";
+                  const startDate = new Date(r.startAt);
+                  const endDate = r.endAt ? new Date(r.endAt) : null;
+                  const isCheckIn = r.kind === "hotel" && sameDayUtc(startDate, dayStart);
+                  const isCheckOut = r.kind === "hotel" && !!endDate && sameDayUtc(endDate, dayStart);
                   const whenLabel =
                     r.kind === "hotel"
                       ? isCheckIn
@@ -409,51 +417,53 @@ export default async function TodayPage({
                       ? [r.title, r.location, r.destination].filter(Boolean).join(", ")
                       : null;
                   return (
-                    <li key={r.id}>
-                      <Link
-                        href={`/events/${r.holidayId}`}
-                        className="flex items-start gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                      >
-                        <div className="mt-0.5 h-9 w-9 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 flex items-center justify-center">
-                          {travelIcon(r.kind)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{r.title}</div>
-                          <div className="text-xs text-zinc-500">
-                            {whenLabel ?? (
-                              <LocalTime iso={new Date(r.startAt).toISOString()} fallback="…" />
-                            )}
-                            {subtitle ? ` · ${subtitle}` : ""}
-                          </div>
-                          {(travelers.length > 0 || mapsQuery) && (
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              {travelers.map((m) => (
-                                <span
-                                  key={m.userId}
-                                  className="inline-flex items-center gap-1 rounded-full border border-zinc-200 px-1.5 py-0 text-[10px] text-zinc-700 dark:border-zinc-800 dark:text-zinc-300"
-                                >
-                                  <span
-                                    className="inline-block h-1.5 w-1.5 rounded-full"
-                                    style={{ background: m.color }}
-                                  />
-                                  {m.displayName}
-                                </span>
-                              ))}
-                              {mapsQuery && (
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 hover:underline dark:text-zinc-300"
-                                >
-                                  <MapPin className="h-3 w-3" /> Maps
-                                </a>
-                              )}
-                            </div>
+                    <li
+                      key={r.id}
+                      className="flex items-start gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    >
+                      <div className="mt-0.5 h-9 w-9 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 flex items-center justify-center shrink-0">
+                        {travelIcon(r.kind)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          href={`/events/${r.holidayId}`}
+                          className="font-medium truncate block hover:underline"
+                        >
+                          {r.title}
+                        </Link>
+                        <div className="text-xs text-zinc-500">
+                          {whenLabel ?? (
+                            <LocalTime iso={startDate.toISOString()} fallback="…" />
                           )}
+                          {subtitle ? ` · ${subtitle}` : ""}
                         </div>
-                      </Link>
+                        {(travelers.length > 0 || mapsQuery) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            {travelers.map((m) => (
+                              <span
+                                key={m.userId}
+                                className="inline-flex items-center gap-1 rounded-full border border-zinc-200 px-1.5 py-0 text-[10px] text-zinc-700 dark:border-zinc-800 dark:text-zinc-300"
+                              >
+                                <span
+                                  className="inline-block h-1.5 w-1.5 rounded-full"
+                                  style={{ background: m.color }}
+                                />
+                                {m.displayName}
+                              </span>
+                            ))}
+                            {mapsQuery && (
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 hover:underline dark:text-zinc-300"
+                              >
+                                <MapPin className="h-3 w-3" /> Maps
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </li>
                   );
                 })}
@@ -493,6 +503,46 @@ export default async function TodayPage({
               color: m.color,
             }))}
           />
+        )}
+
+        {ongoingHolidays.length > 0 && (
+          <Card className={ongoingHolidays.length > 1 || !nextHoliday ? "md:col-span-2" : undefined}>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Ongoing events</CardTitle>
+              <Link href="/events" className="text-xs text-zinc-500 hover:underline">Open events</Link>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {ongoingHolidays.map((h) => {
+                  const start = parseDate(h.startsOn);
+                  const end = h.endsOn ? parseDate(h.endsOn) : null;
+                  const totalDays = end ? differenceInCalendarDays(end, start) + 1 : 1;
+                  const dayNum = differenceInCalendarDays(dayDate, start) + 1;
+                  return (
+                    <li key={h.id}>
+                      <Link
+                        href={`/events/${h.id}`}
+                        className="flex items-start justify-between gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{h.title}</div>
+                          <div className="text-xs text-zinc-500">
+                            {format(start, "d MMM")}
+                            {end ? ` – ${format(end, "d MMM yyyy")}` : ""}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-xs text-zinc-500">
+                            Day {dayNum} of {totalDays}
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
         )}
 
         {nextHoliday && (

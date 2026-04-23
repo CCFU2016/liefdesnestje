@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS "travel_reservations" (
 	"origin" text,
 	"destination" text,
 	"document_url" text,
-	"traveler_user_ids" uuid[] DEFAULT '{}' NOT NULL,
+	"traveler_user_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"deleted_at" timestamp with time zone
