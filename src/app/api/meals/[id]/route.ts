@@ -11,6 +11,11 @@ const patchSchema = z.object({
   servings: z.number().int().positive().nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
   cooked: z.boolean().optional(),
+  restaurantName: z.string().min(1).max(200).nullable().optional(),
+  restaurantUrl: z.string().url().nullable().optional(),
+  restaurantMenuUrl: z.string().url().nullable().optional(),
+  restaurantAddress: z.string().max(300).nullable().optional(),
+  reservationAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
@@ -35,6 +40,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.data.freeText !== undefined) update.freeText = body.data.freeText;
     if (body.data.servings !== undefined) update.servings = body.data.servings;
     if (body.data.visibility !== undefined) update.visibility = body.data.visibility;
+    if (body.data.restaurantName !== undefined) update.restaurantName = body.data.restaurantName;
+    if (body.data.restaurantUrl !== undefined) update.restaurantUrl = body.data.restaurantUrl;
+    if (body.data.restaurantMenuUrl !== undefined) update.restaurantMenuUrl = body.data.restaurantMenuUrl;
+    if (body.data.restaurantAddress !== undefined) update.restaurantAddress = body.data.restaurantAddress;
+    if (body.data.reservationAt !== undefined) {
+      update.reservationAt = body.data.reservationAt ? new Date(body.data.reservationAt) : null;
+    }
 
     if (body.data.cooked !== undefined) {
       const wasCooked = !!current.cookedAt;

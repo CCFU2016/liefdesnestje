@@ -67,3 +67,14 @@ export const EstimatedNutritionSchema = z.object({
 });
 
 export type EstimatedNutrition = z.infer<typeof EstimatedNutritionSchema>;
+
+// Restaurant pages — the user pastes a URL, we fetch the landing HTML, and
+// Claude pulls out the fields we want to surface on the dinner card.
+export const ExtractedRestaurantSchema = z.object({
+  name: z.string().nullable(),
+  address: z.string().nullable(),
+  // Direct link to the menu page or PDF. Resolved to an absolute URL.
+  menuUrl: z.string().nullable(),
+});
+
+export type ExtractedRestaurant = z.infer<typeof ExtractedRestaurantSchema>;

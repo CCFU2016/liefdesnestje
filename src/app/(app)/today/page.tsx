@@ -18,6 +18,7 @@ import { DayNav } from "./day-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
+import { MapPin, UtensilsCrossed } from "lucide-react";
 
 export default async function TodayPage({
   searchParams,
@@ -248,6 +249,51 @@ export default async function TodayPage({
           <CardContent>
             {!tonight ? (
               <p className="text-sm text-zinc-500">Nothing planned. <Link href="/meals" className="underline">Plan a meal →</Link></p>
+            ) : tonight.entry.restaurantName ? (
+              <div className="flex items-start gap-3">
+                <div className="h-14 w-14 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 flex items-center justify-center shrink-0">
+                  <UtensilsCrossed className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{tonight.entry.restaurantName}</div>
+                  {tonight.entry.reservationAt && (
+                    <div className="text-xs text-zinc-500">
+                      Reservation {format(new Date(tonight.entry.reservationAt), "HH:mm")}
+                    </div>
+                  )}
+                  {tonight.entry.restaurantAddress && (
+                    <div className="text-xs text-zinc-500 truncate">
+                      {tonight.entry.restaurantAddress}
+                    </div>
+                  )}
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {tonight.entry.restaurantMenuUrl && (
+                      <a
+                        href={tonight.entry.restaurantMenuUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                      >
+                        Menu
+                      </a>
+                    )}
+                    {(tonight.entry.restaurantName || tonight.entry.restaurantAddress) && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                          [tonight.entry.restaurantName, tonight.entry.restaurantAddress]
+                            .filter(Boolean)
+                            .join(", ")
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                      >
+                        <MapPin className="h-3 w-3" /> Open in Maps
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="flex items-center gap-3">
                 {tonight.recipe?.imageUrl && (

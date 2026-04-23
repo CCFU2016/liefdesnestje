@@ -11,6 +11,11 @@ const createSchema = z.object({
   freeText: z.string().min(1).max(300).nullable().optional(),
   servings: z.number().int().positive().nullable().optional(),
   visibility: z.enum(["private", "shared"]).default("shared"),
+  restaurantName: z.string().min(1).max(200).nullable().optional(),
+  restaurantUrl: z.string().url().nullable().optional(),
+  restaurantMenuUrl: z.string().url().nullable().optional(),
+  restaurantAddress: z.string().max(300).nullable().optional(),
+  reservationAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export async function GET(req: Request) {
@@ -67,9 +72,9 @@ export async function POST(req: Request) {
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-    if (!body.data.recipeId && !body.data.freeText) {
+    if (!body.data.recipeId && !body.data.freeText && !body.data.restaurantName) {
       return NextResponse.json(
-        { error: "Need either a recipe or some text to describe the meal." },
+        { error: "Need a recipe, free text, or a restaurant name." },
         { status: 400 }
       );
     }
@@ -84,6 +89,11 @@ export async function POST(req: Request) {
         freeText: body.data.freeText ?? null,
         servings: body.data.servings ?? null,
         visibility: body.data.visibility,
+        restaurantName: body.data.restaurantName ?? null,
+        restaurantUrl: body.data.restaurantUrl ?? null,
+        restaurantMenuUrl: body.data.restaurantMenuUrl ?? null,
+        restaurantAddress: body.data.restaurantAddress ?? null,
+        reservationAt: body.data.reservationAt ? new Date(body.data.reservationAt) : null,
       })
       .returning();
 

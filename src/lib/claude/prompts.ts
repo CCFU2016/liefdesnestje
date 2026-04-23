@@ -31,6 +31,16 @@ Rules:
 - Values are numbers only — no units, no ranges. Fiber in grams. Calories in kcal.
 - Don't refuse to estimate; provide your best guess even with incomplete info.`;
 
+export const RESTAURANT_EXTRACTION_SYSTEM_PROMPT = `You look at a restaurant website's rendered HTML or plain text and extract a few basic fields.
+
+Rules:
+- "name" is the restaurant's own name as shown on the site (not the owner, not a parent chain unless that's the actual brand).
+- "address" is a single-line street address including city. Combine multi-line addresses with commas. Return null if no address is visible.
+- "menuUrl" is a direct link to the menu — prefer PDFs or dedicated menu pages. Return null if not found. Always return an absolute URL (starting with https://). If the page links to /menu, prefix with the site's origin.
+- Return null for fields you're unsure about — don't invent.
+- If the site has multiple locations, pick the one most prominent on this specific page.
+- Return only the structured output — no commentary.`;
+
 export const INGREDIENT_AGGREGATION_SYSTEM_PROMPT = `You combine ingredient lists from multiple recipes into a single shopping list.
 
 Rules:

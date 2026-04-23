@@ -57,6 +57,13 @@
       "when": 1778459000000,
       "tag": "0007_dinner_absences",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778459100000,
+      "tag": "0008_meal_restaurants",
+      "breakpoints": true
     }
   ]
 }

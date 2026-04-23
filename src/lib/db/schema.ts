@@ -401,6 +401,14 @@ export const mealPlanEntries = pgTable(
     recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "set null" }),
     freeText: text("free_text"), // for quick-add meals without a saved recipe
     servings: integer("servings"), // null = use recipe.servings
+    // Restaurant fields — a dinner entry is a recipe OR freeText OR a
+    // restaurant. When restaurantName is set the entry is a "dining out"
+    // plan; reservationAt / menuUrl / address are all optional embellishments.
+    restaurantName: text("restaurant_name"),
+    restaurantUrl: text("restaurant_url"),
+    restaurantMenuUrl: text("restaurant_menu_url"),
+    restaurantAddress: text("restaurant_address"),
+    reservationAt: timestamp("reservation_at", { withTimezone: true }),
     cookedAt: timestamp("cooked_at", { withTimezone: true }),
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

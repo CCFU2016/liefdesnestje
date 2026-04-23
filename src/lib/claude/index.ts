@@ -5,16 +5,19 @@ import {
   AggregatedListSchema,
   EstimatedNutritionSchema,
   ExtractedRecipeSchema,
+  ExtractedRestaurantSchema,
   SocialExtractionSchema,
   type AggregatedList,
   type EstimatedNutrition,
   type ExtractedRecipe,
+  type ExtractedRestaurant,
   type SocialExtraction,
 } from "./schemas";
 import {
   INGREDIENT_AGGREGATION_SYSTEM_PROMPT,
   NUTRITION_ESTIMATION_SYSTEM_PROMPT,
   RECIPE_SYSTEM_PROMPT,
+  RESTAURANT_EXTRACTION_SYSTEM_PROMPT,
   SOCIAL_CAPTION_SYSTEM_PROMPT,
 } from "./prompts";
 import { assertWithinDailyCap, recordUsage } from "./rate-limit";
@@ -309,9 +312,56 @@ export async function estimateNutrition(input: {
   }
 }
 
+// --- extractRestaurantFromText ---
+
+export async function extractRestaurantFromText(input: {
+  text: string;
+  sourceUrl: string;
+  userId: string;
+}): Promise<ExtractedRestaurant> {
+  await assertWithinDailyCap(input.userId);
+  const started = Date.now();
+  const inputBytes = Buffer.byteLength(input.text, "utf8");
+  try {
+    const resp = await client().messages.parse({
+      model: MODEL,
+      max_tokens: 500,
+      system: RESTAURANT_EXTRACTION_SYSTEM_PROMPT,
+      output_config: { format: zodOutputFormat(ExtractedRestaurantSchema) },
+      messages: [
+        {
+          role: "user",
+          content: `Source URL (use as base for relative links): ${input.sourceUrl}\n\nPage content:\n${input.text}`,
+        },
+      ],
+    });
+    if (!resp.parsed_output) throw new Error("Claude returned no parsed output");
+    await recordUsage({
+      userId: input.userId,
+      callType: "extract-text",
+      success: true,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: JSON.stringify(resp.parsed_output).length,
+      latencyMs: Date.now() - started,
+    });
+    return resp.parsed_output;
+  } catch (e) {
+    await recordUsage({
+      userId: input.userId,
+      callType: "extract-text",
+      success: false,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: 0,
+      latencyMs: Date.now() - started,
+    });
+    throw e;
+  }
+}
+
 export { ExtractionBudgetError } from "./rate-limit";
 export type {
   ExtractedRecipe,
+  ExtractedRestaurant,
   SocialExtraction,
   AggregatedList,
   AggregatedIngredient,
