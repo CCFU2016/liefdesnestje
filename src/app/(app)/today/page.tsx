@@ -189,9 +189,9 @@ export default async function TodayPage({
   );
   const upcomingHolidays = relevantHolidays.filter((h) => h.startsOn > today);
   // Combined chronological list used in the "Events" card — ongoing first
-  // because they're actionable "today", then upcoming in date order. Cap at
-  // a handful so the card stays compact.
-  const combinedEvents = [...ongoingHolidays, ...upcomingHolidays].slice(0, 6);
+  // because they're actionable "today", then upcoming in date order. Capped
+  // at 3 so the card stays tight; rest lives on /events.
+  const combinedEvents = [...ongoingHolidays, ...upcomingHolidays].slice(0, 3);
 
   // Pick the freshest all-day event that actually overlaps today's local
   // window. The DB range filter can drag in a neighbouring day's all-day
