@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { Check, Pencil, RefreshCw, Trash2, X } from "lucide-react";
@@ -221,6 +221,15 @@ export function SettingsClient({
         </CardHeader>
         <CardContent>
           <PhotoAlbumEditor />
+        </CardContent>
+      </Card>
+
+      <Card id="accounts">
+        <CardHeader>
+          <CardTitle>Sign-in methods</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <LinkedAccountsEditor />
         </CardContent>
       </Card>
 
@@ -1009,6 +1018,118 @@ function PhotoAlbumEditor() {
         <Button onClick={save} disabled={saving || !input.trim()}>
           {saving ? "Checking…" : album ? "Replace" : "Connect"}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+type LinkedAccount = {
+  provider: "google";
+  providerAccountId: string;
+  email: string | null;
+};
+
+function LinkedAccountsEditor() {
+  const { data, mutate, isLoading } = useSWR<{ accounts: LinkedAccount[] }>(
+    "/api/auth/linked-accounts",
+    fetcher
+  );
+  const linked = data?.accounts ?? [];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const flash = params.get("linked");
+    if (!flash) return;
+    // Clean the URL so a refresh doesn't re-fire the toast.
+    params.delete("linked");
+    const next = window.location.pathname + (params.toString() ? `?${params}` : "") + "#accounts";
+    window.history.replaceState(null, "", next);
+    switch (flash) {
+      case "ok":
+        toast.success("Linked the second Google account. Sign in with either from now on.");
+        mutate();
+        break;
+      case "already":
+        toast.info("That Google account was already linked.");
+        break;
+      case "in_use":
+        toast.error("That Google account is linked to a different user.");
+        break;
+      case "bad_state":
+        toast.error("Couldn't verify the link request — try again.");
+        break;
+      case "token_failed":
+      case "no_id_token":
+      case "no_subject":
+        toast.error("Google didn't return a valid token.");
+        break;
+      case "not_configured":
+        toast.error("Google OAuth isn't configured on the server.");
+        break;
+      default:
+        toast.error(`Link failed: ${flash}`);
+    }
+  }, [mutate]);
+
+  const unlink = async (providerAccountId: string) => {
+    if (!confirm("Unlink this Google account? You'll no longer be able to sign in with it.")) return;
+    try {
+      const res = await fetch("/api/auth/linked-accounts", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ providerAccountId }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? "Unlink failed");
+      }
+      mutate();
+      toast.success("Unlinked.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Unlink failed");
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-zinc-500">
+        Link a second Google account (e.g. personal + work) so either one can sign in to the same
+        profile. All linked accounts grant full access — only add accounts you control.
+      </p>
+      {isLoading ? (
+        <div className="text-sm text-zinc-500">Loading…</div>
+      ) : (
+        <ul className="space-y-2">
+          {linked.map((a) => (
+            <li
+              key={a.providerAccountId}
+              className="flex items-center justify-between gap-2 rounded-md border border-zinc-200 p-2 text-sm dark:border-zinc-800"
+            >
+              <div className="min-w-0">
+                <div className="font-medium">Google</div>
+                <div className="text-xs text-zinc-500 truncate">
+                  {a.email ?? `Account ${a.providerAccountId.slice(0, 8)}…`}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => unlink(a.providerAccountId)}
+                disabled={linked.length <= 1}
+                className="text-zinc-500 hover:text-red-500"
+                title={linked.length <= 1 ? "Can't remove your last sign-in method" : "Unlink"}
+              >
+                Unlink
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div>
+        <a href="/api/auth/link-google">
+          <Button size="sm">Link another Google account</Button>
+        </a>
       </div>
     </div>
   );
