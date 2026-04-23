@@ -15,24 +15,17 @@ type PhotoPayload = {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-// Hero card showing today's random pick from the connected iCloud shared
-// album. Renders nothing when no album is set so it stays out of the way
-// for people who haven't opted in.
+// Small photo-of-the-day card, rendered at the bottom of Today. Hidden
+// entirely while loading AND when no album is configured, so there's no
+// empty frame flashing in and out.
 export function DailyPhotoCard() {
-  const { data, isLoading } = useSWR<PhotoPayload>("/api/today/photo", fetcher, {
-    // The pick is stable per day per household — no need to poll.
+  const { data } = useSWR<PhotoPayload>("/api/today/photo", fetcher, {
     revalidateOnFocus: false,
     revalidateIfStale: false,
   });
 
-  if (isLoading) {
-    return (
-      <Card className="md:col-span-2 overflow-hidden">
-        <div className="aspect-[16/9] w-full bg-zinc-100 dark:bg-zinc-900 animate-pulse" />
-      </Card>
-    );
-  }
-
+  // Render nothing until we have a confirmed photo — no skeleton, no
+  // placeholder card, so the slot is invisible unless there's content.
   if (!data?.photo) return null;
 
   const { url, caption, contributor, takenAt } = data.photo;
@@ -47,21 +40,24 @@ export function DailyPhotoCard() {
 
   return (
     <Card className="md:col-span-2 overflow-hidden">
-      <div className="relative">
+      <div className="flex items-stretch gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url}
           alt={caption ?? "Photo of the day"}
-          className="w-full max-h-[70vh] object-cover"
+          className="h-24 w-24 sm:h-28 sm:w-28 object-cover shrink-0"
         />
-        {(caption || contributor || takenDate) && (
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-3 text-white">
-            {caption && <div className="text-sm font-medium">{caption}</div>}
-            <div className="text-[11px] text-white/80">
+        <div className="flex flex-col justify-center min-w-0 py-2 pr-3">
+          <div className="text-[11px] uppercase tracking-wider text-zinc-500">
+            Photo of the day
+          </div>
+          {caption && <div className="text-sm font-medium truncate">{caption}</div>}
+          {(contributor || takenDate) && (
+            <div className="text-xs text-zinc-500 truncate">
               {[contributor, takenDate].filter(Boolean).join(" · ")}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </Card>
   );

@@ -253,7 +253,6 @@ export default async function TodayPage({
       )}
 
       <div className="grid gap-4 mt-8 md:grid-cols-2">
-        {viewingToday && <DailyPhotoCard />}
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{viewingToday ? "Today" : format(dayDate, "EEE, d MMM")}</CardTitle>
@@ -572,6 +571,8 @@ export default async function TodayPage({
             </CardContent>
           </Card>
         )}
+
+        {viewingToday && <DailyPhotoCard />}
       </div>
     </div>
   );
