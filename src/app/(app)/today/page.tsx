@@ -276,7 +276,15 @@ export default async function TodayPage({
                     <div className="min-w-0">
                       <div className="font-medium truncate">{e.title}</div>
                       <div className="text-xs text-zinc-500">
-                        {e.allDay ? "All day" : `${format(e.startsAt, "HH:mm")}–${format(e.endsAt, "HH:mm")}`}
+                        {e.allDay ? (
+                          "All day"
+                        ) : (
+                          <>
+                            <LocalTime iso={new Date(e.startsAt).toISOString()} fallback="…" />
+                            {"–"}
+                            <LocalTime iso={new Date(e.endsAt).toISOString()} fallback="…" />
+                          </>
+                        )}
                         {e.location ? ` · ${e.location}` : ""}
                         {e.ownerName && ` · ${e.ownerName}`}
                       </div>
@@ -567,7 +575,15 @@ export default async function TodayPage({
 }
 
 function greet() {
-  const h = new Date().getHours();
+  // Hard-code Europe/Amsterdam so the greeting is right regardless of
+  // server timezone (Railway runs UTC). Fine for this household-scoped app;
+  // swap to viewer-supplied TZ if we ever onboard other regions.
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Amsterdam",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).format(new Date());
+  const h = parseInt(formatted, 10);
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";

@@ -132,7 +132,15 @@ export async function deltaEvents(
   let delta: string | null = null;
   while (next) {
     const page: Page = await graphFetch<Page>(accountId, next, {
-      headers: { Prefer: 'odata.maxpagesize=200, outlook.body-content-type="text"' },
+      // outlook.timezone="UTC" forces Graph to return event times already in
+      // UTC, as naive strings. Without it, Graph responds in the user's
+      // Outlook-configured zone (e.g. Europe/Amsterdam) — and our sync code
+      // then appends "Z" blindly, reading those local times as UTC and
+      // double-counting the offset. That's why Laura's events were 2 hours off.
+      headers: {
+        Prefer:
+          'odata.maxpagesize=200, outlook.body-content-type="text", outlook.timezone="UTC"',
+      },
     });
     all.push(...page.value);
     if (page["@odata.nextLink"]) next = page["@odata.nextLink"];
