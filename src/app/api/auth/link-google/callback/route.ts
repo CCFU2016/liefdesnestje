@@ -50,14 +50,22 @@ function redirectWithFlash(origin: string, slug: "ok" | string): NextResponse {
 export async function GET(req: Request) {
   const hdrs = await headers();
   const origin = getPublicOrigin(hdrs, req.url);
+  console.log("[link-google] callback hit; origin=", origin);
   try {
     const ctx = await requireHouseholdMember();
+    console.log("[link-google] authed as user", ctx.userId);
     const url = new URL(req.url);
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
     const gError = url.searchParams.get("error");
-    if (gError) return redirectWithFlash(origin, gError);
-    if (!code || !state) return redirectWithFlash(origin, "missing_code");
+    if (gError) {
+      console.warn("[link-google] google error param:", gError);
+      return redirectWithFlash(origin, gError);
+    }
+    if (!code || !state) {
+      console.warn("[link-google] missing code or state");
+      return redirectWithFlash(origin, "missing_code");
+    }
 
     // Verify state matches the cookie nonce AND encodes the current user.
     const [stateUserId, nonce] = state.split(".", 2);
@@ -140,6 +148,7 @@ export async function GET(req: Request) {
       scope: tokens.scope ?? null,
       id_token: idToken,
     });
+    console.log("[link-google] inserted account row for user", ctx.userId, "sub", claims.sub);
 
     return redirectWithFlash(origin, "ok");
   } catch (e) {

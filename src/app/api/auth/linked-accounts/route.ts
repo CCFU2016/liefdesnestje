@@ -20,6 +20,8 @@ function decodeIdToken(idToken: string | null): { email: string | null } {
   }
 }
 
+const NO_STORE = { "cache-control": "no-store" } as const;
+
 export async function GET() {
   try {
     const ctx = await requireHouseholdMember();
@@ -36,12 +38,13 @@ export async function GET() {
       providerAccountId: r.providerAccountId,
       email: decodeIdToken(r.id_token).email,
     }));
-    return NextResponse.json({ accounts: out });
+    console.log("[linked-accounts] user=", ctx.userId, "count=", out.length);
+    return NextResponse.json({ accounts: out }, { headers: NO_STORE });
   } catch (e) {
     if (e instanceof UnauthorizedError) {
-      return NextResponse.json({ error: e.message }, { status: e.status });
+      return NextResponse.json({ error: e.message }, { status: e.status, headers: NO_STORE });
     }
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Server error" }, { status: 500, headers: NO_STORE });
   }
 }
 
