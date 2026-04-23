@@ -187,7 +187,11 @@ export default async function TodayPage({
   const ongoingHolidays = relevantHolidays.filter(
     (h) => h.startsOn <= today && (h.endsOn ?? h.startsOn) >= today
   );
-  const nextHoliday = relevantHolidays.find((h) => h.startsOn > today) ?? null;
+  const upcomingHolidays = relevantHolidays.filter((h) => h.startsOn > today);
+  // Combined chronological list used in the "Events" card — ongoing first
+  // because they're actionable "today", then upcoming in date order. Cap at
+  // a handful so the card stays compact.
+  const combinedEvents = [...ongoingHolidays, ...upcomingHolidays].slice(0, 6);
 
   // Pick the freshest all-day event that actually overlaps today's local
   // window. The DB range filter can drag in a neighbouring day's all-day
@@ -473,15 +477,13 @@ export default async function TodayPage({
           </Card>
         )}
 
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>Top to-dos</CardTitle>
-            <Link href="/todos" className="text-xs text-zinc-500 hover:underline">Open to-dos</Link>
-          </CardHeader>
-          <CardContent>
-            {topTodos.length === 0 ? (
-              <p className="text-sm text-zinc-500">All clear — nothing pending.</p>
-            ) : (
+        {topTodos.length > 0 && (
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Top to-dos</CardTitle>
+              <Link href="/todos" className="text-xs text-zinc-500 hover:underline">Open to-dos</Link>
+            </CardHeader>
+            <CardContent>
               <ul className="space-y-2">
                 {topTodos.map((t) => (
                   <li key={t.id} className="text-sm">
@@ -492,9 +494,9 @@ export default async function TodayPage({
                   </li>
                 ))}
               </ul>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {viewingToday && (
           <DinnerWeeklyPrompt
@@ -506,19 +508,35 @@ export default async function TodayPage({
           />
         )}
 
-        {ongoingHolidays.length > 0 && (
-          <Card className={ongoingHolidays.length > 1 || !nextHoliday ? "md:col-span-2" : undefined}>
+        {combinedEvents.length > 0 && (
+          <Card>
             <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Ongoing events</CardTitle>
+              <CardTitle>Events</CardTitle>
               <Link href="/events" className="text-xs text-zinc-500 hover:underline">Open events</Link>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {ongoingHolidays.map((h) => {
+                {combinedEvents.map((h) => {
                   const start = parseDate(h.startsOn);
                   const end = h.endsOn ? parseDate(h.endsOn) : null;
-                  const totalDays = end ? differenceInCalendarDays(end, start) + 1 : 1;
-                  const dayNum = differenceInCalendarDays(dayDate, start) + 1;
+                  const isOngoing = h.startsOn <= today && (h.endsOn ?? h.startsOn) >= today;
+                  let rightSide: React.ReactNode;
+                  if (isOngoing) {
+                    const totalDays = end ? differenceInCalendarDays(end, start) + 1 : 1;
+                    const dayNum = differenceInCalendarDays(dayDate, start) + 1;
+                    rightSide = (
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400">
+                        Day {dayNum} of {totalDays}
+                      </span>
+                    );
+                  } else {
+                    const daysAway = differenceInCalendarDays(start, new Date());
+                    rightSide = (
+                      <span className="text-xs text-zinc-500">
+                        in {daysAway} {daysAway === 1 ? "day" : "days"}
+                      </span>
+                    );
+                  }
                   return (
                     <li key={h.id}>
                       <Link
@@ -532,42 +550,12 @@ export default async function TodayPage({
                             {end ? ` – ${format(end, "d MMM yyyy")}` : ""}
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <div className="text-xs text-zinc-500">
-                            Day {dayNum} of {totalDays}
-                          </div>
-                        </div>
+                        <div className="text-right shrink-0">{rightSide}</div>
                       </Link>
                     </li>
                   );
                 })}
               </ul>
-            </CardContent>
-          </Card>
-        )}
-
-        {nextHoliday && (
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle>Next event</CardTitle>
-              <Link href="/events" className="text-xs text-zinc-500 hover:underline">Open events</Link>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline justify-between">
-                <div className="min-w-0">
-                  <div className="text-lg font-medium truncate">{nextHoliday.title}</div>
-                  <div className="text-sm text-zinc-500">
-                    {format(parseDate(nextHoliday.startsOn), "d MMM yyyy")}
-                    {nextHoliday.endsOn && ` – ${format(parseDate(nextHoliday.endsOn), "d MMM yyyy")}`}
-                  </div>
-                </div>
-                <div className="text-right shrink-0 ml-3">
-                  <div className="text-3xl font-bold">
-                    {differenceInCalendarDays(parseDate(nextHoliday.startsOn), new Date())}
-                  </div>
-                  <div className="text-xs text-zinc-500">days</div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         )}
