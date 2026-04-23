@@ -15,6 +15,7 @@ import {
 import { and, desc, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm";
 import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
 import { DayNav } from "./day-nav";
+import { LocalTime } from "./local-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
@@ -258,7 +259,7 @@ export default async function TodayPage({
                   <div className="font-medium truncate">{tonight.entry.restaurantName}</div>
                   {tonight.entry.reservationAt && (
                     <div className="text-xs text-zinc-500">
-                      Reservation {format(new Date(tonight.entry.reservationAt), "HH:mm")}
+                      Reservation <LocalTime iso={new Date(tonight.entry.reservationAt).toISOString()} fallback="…" />
                     </div>
                   )}
                   {tonight.entry.restaurantAddress && (

@@ -41,20 +41,25 @@ export function DayNav({
       >
         <ChevronLeft className="h-3.5 w-3.5" /> Prev
       </Link>
-      {showTodayLink && (
-        <Link
-          href="/today"
-          className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          Today
-        </Link>
-      )}
       <Link
         href={`/today?date=${nextDate}`}
         className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
         aria-label="Next day"
       >
         Next <ChevronRight className="h-3.5 w-3.5" />
+      </Link>
+      {/* Today button comes AFTER Next so Prev/Next positions never shift as
+          we scrub between today and other days. When viewing today the button
+          is still rendered but hidden via visibility: hidden to keep the
+          overall row width stable — JS shortcuts (ArrowLeft/Right) still work. */}
+      <Link
+        href="/today"
+        className="inline-flex items-center rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        style={{ visibility: showTodayLink ? "visible" : "hidden" }}
+        aria-hidden={!showTodayLink}
+        tabIndex={showTodayLink ? 0 : -1}
+      >
+        Today
       </Link>
     </div>
   );
