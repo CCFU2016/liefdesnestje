@@ -17,9 +17,9 @@ const items = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/todos", label: "To-dos", icon: CheckSquare },
-  { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/events", label: "Events", icon: CalendarRange },
+  { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
