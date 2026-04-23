@@ -17,6 +17,7 @@ import { and, desc, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm
 import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
 import { DayNav } from "./day-nav";
 import { LocalTime } from "./local-time";
+import { DailyPhotoCard } from "./daily-photo-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
@@ -252,6 +253,7 @@ export default async function TodayPage({
       )}
 
       <div className="grid gap-4 mt-8 md:grid-cols-2">
+        {viewingToday && <DailyPhotoCard />}
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{viewingToday ? "Today" : format(dayDate, "EEE, d MMM")}</CardTitle>

@@ -71,6 +71,13 @@
       "when": 1778459200000,
       "tag": "0009_travel_reservations",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778459300000,
+      "tag": "0010_photo_of_the_day",
+      "breakpoints": true
     }
   ]
 }

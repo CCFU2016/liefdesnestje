@@ -459,6 +459,48 @@ export const travelReservations = pgTable(
   ]
 );
 
+// iCloud Shared Album config per household — the user pastes the public
+// share URL in Settings and we remember the derived token + partition
+// base URL so the daily picker doesn't have to re-resolve each run.
+export const householdPhotoAlbums = pgTable("household_photo_albums", {
+  householdId: uuid("household_id")
+    .primaryKey()
+    .references(() => households.id, { onDelete: "cascade" }),
+  shareUrl: text("share_url").notNull(),
+  albumToken: text("album_token").notNull(),
+  baseUrl: text("base_url"), // e.g. https://p123-sharedstreams.icloud.com/TOKEN/sharedstreams/
+  streamName: text("stream_name"),
+  lastError: text("last_error"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// One row per household per day. The picker inserts a row the first time
+// Today page loads each day; subsequent reads just return the cached entry.
+// Old rows are retained so we can avoid re-picking guids shown in the last
+// ~30 days.
+export const photoOfTheDay = pgTable(
+  "photo_of_the_day",
+  {
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // YYYY-MM-DD
+    photoGuid: text("photo_guid").notNull(),
+    localPath: text("local_path").notNull(), // relative to UPLOAD_ROOT
+    mimeType: text("mime_type").notNull().default("image/jpeg"),
+    caption: text("caption"),
+    contributorName: text("contributor_name"),
+    takenAt: timestamp("taken_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.householdId, t.date] }),
+    index("photo_of_the_day_household_idx").on(t.householdId),
+  ]
+);
+
 // Dinner absences: rows exist only for (userId, date) pairs where the member
 // is NOT eating at home. Absence of a row == at home, so the weekly popup
 // just needs to sync the "away" set for next week.
