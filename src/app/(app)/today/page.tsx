@@ -189,9 +189,10 @@ export default async function TodayPage({
   );
   const upcomingHolidays = relevantHolidays.filter((h) => h.startsOn > today);
   // Combined chronological list used in the "Events" card — ongoing first
-  // because they're actionable "today", then upcoming in date order. Capped
-  // at 3 so the card stays tight; rest lives on /events.
-  const combinedEvents = [...ongoingHolidays, ...upcomingHolidays].slice(0, 3);
+  // because they're actionable "today", then upcoming in date order. Renders
+  // as many as fit inside the card (matched in height to its neighbor tile),
+  // extra rows scroll. Hard cap of 15 so the query result stays bounded.
+  const combinedEvents = [...ongoingHolidays, ...upcomingHolidays].slice(0, 15);
 
   // Pick the freshest all-day event that actually overlaps today's local
   // window. The DB range filter can drag in a neighbouring day's all-day
@@ -257,7 +258,7 @@ export default async function TodayPage({
       )}
 
       <div className="grid gap-4 mt-8 md:grid-cols-2">
-        <Card>
+        <Card className="h-full flex flex-col">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{viewingToday ? "Today" : format(dayDate, "EEE, d MMM")}</CardTitle>
             <Link href="/calendar" className="text-xs text-zinc-500 hover:underline">Open calendar</Link>
@@ -517,12 +518,16 @@ export default async function TodayPage({
         )}
 
         {combinedEvents.length > 0 && (
-          <Card>
+          // h-full + flex column so the card stretches to match its neighbor
+          // in the CSS grid row (md:grid-cols-2 equalises the row height
+          // automatically). The list inside takes the remaining space and
+          // scrolls when it overflows.
+          <Card className="h-full flex flex-col">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Events</CardTitle>
               <Link href="/events" className="text-xs text-zinc-500 hover:underline">Open events</Link>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 min-h-0 overflow-y-auto">
               <ul className="space-y-2">
                 {combinedEvents.map((h) => {
                   const start = parseDate(h.startsOn);
