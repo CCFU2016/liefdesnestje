@@ -41,6 +41,23 @@ Rules:
 - If the site has multiple locations, pick the one most prominent on this specific page.
 - Return only the structured output — no commentary.`;
 
+export const RESERVATION_EXTRACTION_SYSTEM_PROMPT = `You extract travel reservations from PDFs, e-tickets, hotel confirmations, and booking screenshots.
+
+Rules:
+- "kind": pick the closest match. Hotels are "hotel". Flights are "flight". Train bookings (NS, Deutsche Bahn, Eurostar, Amtrak, etc.) are "train". Car rentals "car_rental". Ferries "ferry". Local/ground transit (taxi, airport shuttle) is "transit". Anything else is "other".
+- "title": a short, human-readable display name. For flights: "AIRLINE FLIGHT# ORIGIN→DEST" (e.g. "KL1234 AMS→JFK"). For hotels: the hotel name (e.g. "Marriott Amsterdam"). For trains: route ("NS Utrecht → Amsterdam"). Keep it under ~60 chars.
+- "startAt": ISO 8601 with timezone offset when possible.
+  - Hotels: check-in date and time (or check-in date at 15:00 local if only a date is given).
+  - Flights: departure date and time at the origin airport.
+  - Trains: departure time.
+- "endAt": ISO 8601. Hotels: checkout. Flights: arrival. Return null if no clear end.
+- "location" for hotels: full street address including city.
+- "origin"/"destination": IATA codes when visible for flights (AMS, JFK). For trains/cars use station or city names.
+- "confirmationCode": booking reference / PNR / reservation code if present.
+- "notes": anything else useful (seat, class, meal, room type). One or two short lines.
+- Return null for fields you're not confident about — don't invent.
+- Return only the structured output.`;
+
 export const INGREDIENT_AGGREGATION_SYSTEM_PROMPT = `You combine ingredient lists from multiple recipes into a single shopping list.
 
 Rules:

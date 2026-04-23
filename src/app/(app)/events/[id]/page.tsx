@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CalendarCheck, ExternalLink } from "lucide-react";
+import { TravelSection } from "./travel-section";
 
 export default async function EventDetailPage({
   params,
@@ -127,6 +128,14 @@ export default async function EventDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <TravelSection
+        holidayId={h.id}
+        hasTravel={h.hasTravel}
+        members={members}
+        currentUserId={ctx.userId}
+        canEdit={h.authorId === ctx.userId}
+      />
 
       {h.authorId === ctx.userId && (
         <div className="mt-4">

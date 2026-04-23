@@ -20,6 +20,7 @@ const patchSchema = z.object({
   pushToCalendar: z.boolean().optional(),
   pushProvider: z.enum(["google", "microsoft"]).nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
+  hasTravel: z.boolean().optional(),
 });
 
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
@@ -86,6 +87,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (body.data.categoryId !== undefined) update.categoryId = body.data.categoryId;
     if (body.data.visibility !== undefined) update.visibility = body.data.visibility;
     if (body.data.pushToCalendar !== undefined) update.pushToCalendar = body.data.pushToCalendar;
+    if (body.data.hasTravel !== undefined) update.hasTravel = body.data.hasTravel;
 
     const newStartsOn = body.data.startsOn ?? h.startsOn;
     const newEndsOn = body.data.endsOn !== undefined ? body.data.endsOn : h.endsOn;

@@ -64,6 +64,13 @@
       "when": 1778459100000,
       "tag": "0008_meal_restaurants",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778459200000,
+      "tag": "0009_travel_reservations",
+      "breakpoints": true
     }
   ]
 }

@@ -78,3 +78,21 @@ export const ExtractedRestaurantSchema = z.object({
 });
 
 export type ExtractedRestaurant = z.infer<typeof ExtractedRestaurantSchema>;
+
+// Travel reservation documents (hotel bookings, flight e-tickets, train
+// confirmations). The user uploads a PDF or a screenshot and Claude fills
+// in the structured form — user then confirms before save.
+export const ExtractedReservationSchema = z.object({
+  kind: z.enum(["hotel", "flight", "train", "car_rental", "ferry", "transit", "other"]),
+  title: z.string(), // short display name, e.g. "Marriott Amsterdam" or "KL1234 AMS→JFK"
+  // ISO 8601 strings. startAt is required; for hotels use check-in date-time.
+  startAt: z.string(),
+  endAt: z.string().nullable(),
+  location: z.string().nullable(),
+  confirmationCode: z.string().nullable(),
+  origin: z.string().nullable(),
+  destination: z.string().nullable(),
+  notes: z.string().nullable(),
+});
+
+export type ExtractedReservation = z.infer<typeof ExtractedReservationSchema>;

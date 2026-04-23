@@ -11,6 +11,7 @@ import {
   recipes,
   todos,
   todoLists,
+  travelReservations,
 } from "@/lib/db/schema";
 import { and, desc, eq, gte, ilike, isNull, lte, or, inArray } from "drizzle-orm";
 import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
@@ -19,7 +20,7 @@ import { LocalTime } from "./local-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
-import { MapPin, UtensilsCrossed } from "lucide-react";
+import { Bed, Car, ChevronRight as ArrowRightIcon, MapPin, Plane, Ship, Train, UtensilsCrossed } from "lucide-react";
 
 export default async function TodayPage({
   searchParams,
@@ -35,7 +36,7 @@ export default async function TodayPage({
   const today = toDateStr(dayDate);
   const viewingToday = isTodayFn(dayDate);
 
-  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences, nikiWorkRaw] = await Promise.all([
+  const [todayEventsRaw, lists, members, tonightRaw, nextHoliday, todayAbsences, todayTravel, nikiWorkRaw] = await Promise.all([
     db
       .select({ event: events, calendar: calendars, account: externalCalendarAccounts })
       .from(events)
@@ -92,6 +93,36 @@ export default async function TodayPage({
       .from(dinnerAbsences)
       .where(
         and(eq(dinnerAbsences.householdId, ctx.householdId), eq(dinnerAbsences.date, today))
+      ),
+    // Travel reservations active on the viewed day — any booking whose
+    // window overlaps [dayStart, dayEnd]. Hotels span multiple days so
+    // they appear every night of the stay. Flights typically have the
+    // arrival in endAt so they show on both origin day and arrival day.
+    db
+      .select({
+        id: travelReservations.id,
+        holidayId: travelReservations.holidayId,
+        kind: travelReservations.kind,
+        title: travelReservations.title,
+        startAt: travelReservations.startAt,
+        endAt: travelReservations.endAt,
+        location: travelReservations.location,
+        origin: travelReservations.origin,
+        destination: travelReservations.destination,
+        confirmationCode: travelReservations.confirmationCode,
+        travelerUserIds: travelReservations.travelerUserIds,
+      })
+      .from(travelReservations)
+      .where(
+        and(
+          eq(travelReservations.householdId, ctx.householdId),
+          isNull(travelReservations.deletedAt),
+          lte(travelReservations.startAt, dayEnd),
+          or(
+            isNull(travelReservations.endAt),
+            gte(travelReservations.endAt, dayStart)
+          )
+        )
       ),
     // Niki's work status — separate query so it fires regardless of whether
     // the "Niki werk" calendar is toggled on the Today widget (user may hide
@@ -344,6 +375,93 @@ export default async function TodayPage({
           </CardContent>
         </Card>
 
+        {todayTravel.length > 0 && (
+          <Card className="md:col-span-2">
+            <CardHeader className="flex-row items-center justify-between">
+              <CardTitle>Travel {viewingToday ? "today" : `· ${format(dayDate, "d MMM")}`}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {todayTravel.map((r) => {
+                  const travelers = r.travelerUserIds
+                    .map((uid) => memberByUserId.get(uid))
+                    .filter((m): m is NonNullable<typeof m> => !!m);
+                  const isCheckIn =
+                    sameDayUtc(new Date(r.startAt), dayStart) && r.kind === "hotel";
+                  const isCheckOut =
+                    r.endAt &&
+                    sameDayUtc(new Date(r.endAt), dayStart) &&
+                    r.kind === "hotel";
+                  const whenLabel =
+                    r.kind === "hotel"
+                      ? isCheckIn
+                        ? "Check-in tonight"
+                        : isCheckOut
+                          ? "Check-out"
+                          : "Overnight stay"
+                      : null;
+                  const subtitle =
+                    r.kind === "flight" || r.kind === "train"
+                      ? `${r.origin ?? ""}${r.destination ? ` → ${r.destination}` : ""}`
+                      : r.location ?? "";
+                  const mapsQuery =
+                    r.location || r.destination || r.origin
+                      ? [r.title, r.location, r.destination].filter(Boolean).join(", ")
+                      : null;
+                  return (
+                    <li key={r.id}>
+                      <Link
+                        href={`/events/${r.holidayId}`}
+                        className="flex items-start gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      >
+                        <div className="mt-0.5 h-9 w-9 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 flex items-center justify-center">
+                          {travelIcon(r.kind)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{r.title}</div>
+                          <div className="text-xs text-zinc-500">
+                            {whenLabel ?? (
+                              <LocalTime iso={new Date(r.startAt).toISOString()} fallback="…" />
+                            )}
+                            {subtitle ? ` · ${subtitle}` : ""}
+                          </div>
+                          {(travelers.length > 0 || mapsQuery) && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              {travelers.map((m) => (
+                                <span
+                                  key={m.userId}
+                                  className="inline-flex items-center gap-1 rounded-full border border-zinc-200 px-1.5 py-0 text-[10px] text-zinc-700 dark:border-zinc-800 dark:text-zinc-300"
+                                >
+                                  <span
+                                    className="inline-block h-1.5 w-1.5 rounded-full"
+                                    style={{ background: m.color }}
+                                  />
+                                  {m.displayName}
+                                </span>
+                              ))}
+                              {mapsQuery && (
+                                <a
+                                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-0.5 text-[10px] text-zinc-600 hover:underline dark:text-zinc-300"
+                                >
+                                  <MapPin className="h-3 w-3" /> Maps
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>Top to-dos</CardTitle>
@@ -421,6 +539,32 @@ function toDateStr(d: Date): string {
 function parseDate(yyyyMmDd: string): Date {
   const [y, m, d] = yyyyMmDd.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+function travelIcon(kind: string) {
+  const cn = "h-5 w-5";
+  switch (kind) {
+    case "hotel":
+      return <Bed className={cn} />;
+    case "flight":
+      return <Plane className={cn} />;
+    case "train":
+      return <Train className={cn} />;
+    case "car_rental":
+      return <Car className={cn} />;
+    case "ferry":
+      return <Ship className={cn} />;
+    default:
+      return <ArrowRightIcon className={cn} />;
+  }
+}
+
+function sameDayUtc(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 function parseDateParam(s: string | undefined): Date | null {

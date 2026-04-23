@@ -5,11 +5,13 @@ import {
   AggregatedListSchema,
   EstimatedNutritionSchema,
   ExtractedRecipeSchema,
+  ExtractedReservationSchema,
   ExtractedRestaurantSchema,
   SocialExtractionSchema,
   type AggregatedList,
   type EstimatedNutrition,
   type ExtractedRecipe,
+  type ExtractedReservation,
   type ExtractedRestaurant,
   type SocialExtraction,
 } from "./schemas";
@@ -17,6 +19,7 @@ import {
   INGREDIENT_AGGREGATION_SYSTEM_PROMPT,
   NUTRITION_ESTIMATION_SYSTEM_PROMPT,
   RECIPE_SYSTEM_PROMPT,
+  RESERVATION_EXTRACTION_SYSTEM_PROMPT,
   RESTAURANT_EXTRACTION_SYSTEM_PROMPT,
   SOCIAL_CAPTION_SYSTEM_PROMPT,
 } from "./prompts";
@@ -358,9 +361,96 @@ export async function extractRestaurantFromText(input: {
   }
 }
 
+// --- extractReservation ---
+
+export async function extractReservation(input: {
+  mediaType: "application/pdf" | "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  base64: string;
+  hintText?: string;
+  userId: string;
+}): Promise<ExtractedReservation> {
+  await assertWithinDailyCap(input.userId);
+  const started = Date.now();
+  const inputBytes = input.base64.length;
+
+  const content: Array<
+    | {
+        type: "document";
+        source: { type: "base64"; media_type: "application/pdf"; data: string };
+      }
+    | {
+        type: "image";
+        source: {
+          type: "base64";
+          media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+          data: string;
+        };
+      }
+    | { type: "text"; text: string }
+  > =
+    input.mediaType === "application/pdf"
+      ? [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: input.base64,
+            },
+          },
+        ]
+      : [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: input.mediaType,
+              data: input.base64,
+            },
+          },
+        ];
+  content.push({
+    type: "text",
+    text: input.hintText
+      ? `Extract the reservation. Context: ${input.hintText}`
+      : "Extract the reservation details from this document.",
+  });
+
+  try {
+    const resp = await client().messages.parse({
+      model: MODEL,
+      max_tokens: 800,
+      system: RESERVATION_EXTRACTION_SYSTEM_PROMPT,
+      output_config: { format: zodOutputFormat(ExtractedReservationSchema) },
+      messages: [{ role: "user", content }],
+    });
+    if (!resp.parsed_output) throw new Error("Claude returned no parsed output");
+    await recordUsage({
+      userId: input.userId,
+      callType: "extract-image",
+      success: true,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: JSON.stringify(resp.parsed_output).length,
+      latencyMs: Date.now() - started,
+    });
+    return resp.parsed_output;
+  } catch (e) {
+    await recordUsage({
+      userId: input.userId,
+      callType: "extract-image",
+      success: false,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: 0,
+      latencyMs: Date.now() - started,
+    });
+    throw e;
+  }
+}
+
 export { ExtractionBudgetError } from "./rate-limit";
 export type {
   ExtractedRecipe,
+  ExtractedReservation,
   ExtractedRestaurant,
   SocialExtraction,
   AggregatedList,

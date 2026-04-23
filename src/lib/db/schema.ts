@@ -319,6 +319,7 @@ export const holidays = pgTable(
     endsOn: text("ends_on"), // nullable for single-day
     forPersons: uuid("for_persons").array().notNull().default(sql`'{}'::uuid[]`),
     documentUrl: text("document_url"),
+    hasTravel: boolean("has_travel").notNull().default(false),
     pushToCalendar: boolean("push_to_calendar").notNull().default(false),
     externalCalendarEventId: text("external_calendar_event_id"),
     externalCalendarProvider: calendarProviderEnum("external_calendar_provider"),
@@ -418,6 +419,43 @@ export const mealPlanEntries = pgTable(
   (t) => [
     index("meal_plan_household_idx").on(t.householdId),
     index("meal_plan_date_idx").on(t.date),
+  ]
+);
+
+// Travel reservations attached to an event (via holidayId). A single event
+// can span multiple days and multiple bookings (flight out, hotel, flight
+// back, etc.). Kind is a free-form text field — we render different icons
+// per known kind but don't constrain at the DB level.
+export const travelReservations = pgTable(
+  "travel_reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    holidayId: uuid("holiday_id")
+      .notNull()
+      .references(() => holidays.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("other"), // 'hotel' | 'flight' | 'train' | 'car_rental' | 'ferry' | 'transit' | 'other'
+    title: text("title").notNull(),
+    startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true }),
+    location: text("location"),
+    confirmationCode: text("confirmation_code"),
+    referenceUrl: text("reference_url"),
+    notes: text("notes"),
+    origin: text("origin"),
+    destination: text("destination"),
+    documentUrl: text("document_url"),
+    travelerUserIds: uuid("traveler_user_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("travel_reservations_household_idx").on(t.householdId),
+    index("travel_reservations_holiday_idx").on(t.holidayId),
+    index("travel_reservations_range_idx").on(t.startAt, t.endAt),
   ]
 );
 
