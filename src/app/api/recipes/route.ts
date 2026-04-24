@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { recipes, recipeFavorites } from "@/lib/db/schema";
 import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { estimateNutrition } from "@/lib/claude";
 
 const ingredientSchema = z.object({
   quantity: z.string().nullable().optional(),
@@ -124,6 +125,41 @@ export async function POST(req: Request) {
         visibility: body.data.visibility,
       })
       .returning();
+
+    // Auto-estimate nutrition when the incoming recipe has ingredients but
+    // no macros (manual entries, or URL/image extractions where Claude
+    // couldn't infer them). Fire-and-forget so the POST returns fast; the
+    // recipe page picks up the updated row on its next SWR refresh.
+    const hasRealMacros =
+      !!created.nutritionPerServing &&
+      Object.values(created.nutritionPerServing).some((v) => typeof v === "number");
+    if (!hasRealMacros && body.data.ingredients.length > 0) {
+      queueMicrotask(async () => {
+        try {
+          const nutrition = await estimateNutrition({
+            recipeTitle: created.title,
+            servings: created.servings,
+            ingredients: body.data.ingredients.map((i) => ({
+              quantity: i.quantity ?? null,
+              unit: i.unit ?? null,
+              name: i.name,
+              notes: i.notes ?? null,
+            })),
+            userId: ctx.userId,
+          });
+          await db
+            .update(recipes)
+            .set({ nutritionPerServing: nutrition, updatedAt: new Date() })
+            .where(eq(recipes.id, created.id));
+        } catch (e) {
+          console.warn(
+            "[recipes] auto-estimate nutrition failed for",
+            created.id,
+            e instanceof Error ? e.message : String(e)
+          );
+        }
+      });
+    }
 
     return NextResponse.json({ recipe: created });
   } catch (e) {

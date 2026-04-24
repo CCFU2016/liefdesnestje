@@ -356,33 +356,37 @@ export default async function TodayPage({
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                {tonight.recipe?.imageUrl && (
+            ) : tonight.recipe ? (
+              // Whole tile is the cook-mode shortcut — tap anywhere on
+              // the photo/title to jump straight into the cooking steps.
+              <Link
+                href={`/meals/recipes/${tonight.recipe.id}/cook`}
+                className="flex items-center gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+              >
+                {tonight.recipe.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={tonight.recipe.imageUrl}
                     alt=""
-                    className="h-14 w-14 rounded-md object-cover"
+                    className="h-14 w-14 rounded-md object-cover shrink-0"
                   />
                 )}
                 <div className="min-w-0">
-                  <div className="font-medium truncate">
-                    {tonight.recipe?.title ?? tonight.entry.freeText ?? "Dinner"}
-                  </div>
-                  {tonight.recipe?.cookTimeMinutes && (
+                  <div className="font-medium truncate">{tonight.recipe.title}</div>
+                  {tonight.recipe.cookTimeMinutes && (
                     <div className="text-xs text-zinc-500">
                       ~{tonight.recipe.cookTimeMinutes} min cook time
                     </div>
                   )}
-                  {tonight.recipe && (
-                    <Link
-                      href={`/meals/recipes/${tonight.recipe.id}/cook`}
-                      className="text-xs text-zinc-600 hover:underline mt-0.5 inline-block"
-                    >
-                      Start cook mode →
-                    </Link>
-                  )}
+                  <div className="text-xs text-zinc-600 mt-0.5">Start cook mode →</div>
+                </div>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {tonight.entry.freeText ?? "Dinner"}
+                  </div>
                 </div>
               </div>
             )}
