@@ -37,6 +37,12 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
+  // Lock zoom: this is a household dashboard, not a reading surface — the
+  // pinch-zoom gesture mostly just triggers by accident when scrolling.
+  // iOS Safari in PWA/standalone mode respects both of these; in a regular
+  // browser tab iOS may still allow zoom for accessibility (that's fine).
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
 };
 
