@@ -447,7 +447,7 @@ export default async function TodayPage({
                         >
                           {r.title}
                         </Link>
-                        <div className="text-xs text-zinc-500">
+                        <div className="text-xs text-zinc-500 truncate">
                           {whenLabel ?? (
                             <LocalTime iso={startDate.toISOString()} fallback="…" />
                           )}
