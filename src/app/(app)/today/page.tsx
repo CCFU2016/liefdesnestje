@@ -259,8 +259,12 @@ export default async function TodayPage({
         </div>
       )}
 
-      <div className="grid gap-4 mt-8 md:grid-cols-2">
-        <Card className="h-full flex flex-col">
+      {/* grid-cols-1 makes the mobile single-column explicit with a 1fr
+          track (minmax(0, 1fr)), so a long child can't force the column
+          to grow past the viewport — children clip cleanly via their own
+          overflow rules instead. */}
+      <div className="grid gap-4 mt-8 grid-cols-1 md:grid-cols-2">
+        <Card className="h-full flex flex-col min-w-0 overflow-hidden">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle>{viewingToday ? "Today" : format(dayDate, "EEE, d MMM")}</CardTitle>
             <Link href="/calendar" className="text-xs text-zinc-500 hover:underline">Open calendar</Link>
@@ -402,7 +406,7 @@ export default async function TodayPage({
         </Card>
 
         {todayTravel.length > 0 && (
-          <Card className="md:col-span-2">
+          <Card className="md:col-span-2 min-w-0 overflow-hidden">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle>Travel {viewingToday ? "today" : `· ${format(dayDate, "d MMM")}`}</CardTitle>
             </CardHeader>
@@ -435,7 +439,7 @@ export default async function TodayPage({
                   return (
                     <li
                       key={r.id}
-                      className="flex items-start gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      className="flex items-start gap-3 rounded-md p-2 -m-2 min-w-0 hover:bg-zinc-50 dark:hover:bg-zinc-900"
                     >
                       <div className="mt-0.5 h-9 w-9 rounded-md bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 flex items-center justify-center shrink-0">
                         {travelIcon(r.kind)}

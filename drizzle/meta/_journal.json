@@ -92,6 +92,13 @@
       "when": 1778459500000,
       "tag": "0012_reset_ms_delta_links",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778459600000,
+      "tag": "0013_trim_display_names",
+      "breakpoints": true
     }
   ]
 }
