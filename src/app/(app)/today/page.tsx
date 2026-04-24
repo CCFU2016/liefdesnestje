@@ -18,6 +18,7 @@ import { DinnerWeeklyPrompt } from "./dinner-weekly-prompt";
 import { DayNav } from "./day-nav";
 import { LocalTime } from "./local-time";
 import { DailyPhotoCard } from "./daily-photo-card";
+import { SwipeDays } from "./swipe-days";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
@@ -247,6 +248,7 @@ export default async function TodayPage({
       </p>
 
       <DayNav prevDate={prevDate} nextDate={nextDate} showTodayLink={!viewingToday} />
+      <SwipeDays prevDate={prevDate} nextDate={nextDate} />
 
       {nikiWorkLabel && (
         <div className="mt-3">
