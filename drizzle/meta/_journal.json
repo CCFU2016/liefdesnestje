@@ -99,6 +99,13 @@
       "when": 1778459600000,
       "tag": "0013_trim_display_names",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778459700000,
+      "tag": "0014_event_documents",
+      "breakpoints": true
     }
   ]
 }

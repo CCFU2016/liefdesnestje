@@ -422,6 +422,33 @@ export const mealPlanEntries = pgTable(
   ]
 );
 
+// Arbitrary file attachments for an event — PDFs, images, screenshots of
+// booking confirmations, ticket PDFs, etc. Multiple per event, kept until
+// soft-deleted. The legacy holidays.document_url still exists but new
+// uploads go here; the UI reads both and merges for display.
+export const eventDocuments = pgTable(
+  "event_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    holidayId: uuid("holiday_id")
+      .notNull()
+      .references(() => holidays.id, { onDelete: "cascade" }),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    filename: text("filename").notNull(),
+    localPath: text("local_path").notNull(), // relative to UPLOAD_ROOT
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("event_documents_holiday_idx").on(t.holidayId)]
+);
+
 // Travel reservations attached to an event (via holidayId). A single event
 // can span multiple days and multiple bookings (flight out, hotel, flight
 // back, etc.). Kind is a free-form text field — we render different icons

@@ -7,8 +7,9 @@ import { differenceInCalendarDays, format } from "date-fns";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, ExternalLink } from "lucide-react";
+import { CalendarCheck } from "lucide-react";
 import { TravelSection } from "./travel-section";
+import { DocumentsSection } from "./documents-section";
 
 export default async function EventDetailPage({
   params,
@@ -111,23 +112,11 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      {h.documentUrl && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Document</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <a
-              href={h.documentUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-sm underline"
-            >
-              Open document <ExternalLink className="h-3 w-3" />
-            </a>
-          </CardContent>
-        </Card>
-      )}
+      <DocumentsSection
+        holidayId={h.id}
+        legacyDocumentUrl={h.documentUrl ?? null}
+        canEdit={h.authorId === ctx.userId}
+      />
 
       <TravelSection
         holidayId={h.id}
