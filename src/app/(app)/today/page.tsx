@@ -357,10 +357,11 @@ export default async function TodayPage({
                 </div>
               </div>
             ) : tonight.recipe ? (
-              // Whole tile is the cook-mode shortcut — tap anywhere on
-              // the photo/title to jump straight into the cooking steps.
+              // Whole tile links to the recipe detail page. Cook mode
+              // lives one tap deeper from there (the recipe page has its
+              // own "Start cook mode" button).
               <Link
-                href={`/meals/recipes/${tonight.recipe.id}/cook`}
+                href={`/meals/recipes/${tonight.recipe.id}`}
                 className="flex items-center gap-3 rounded-md p-2 -m-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
               >
                 {tonight.recipe.imageUrl && (
@@ -378,7 +379,6 @@ export default async function TodayPage({
                       ~{tonight.recipe.cookTimeMinutes} min cook time
                     </div>
                   )}
-                  <div className="text-xs text-zinc-600 mt-0.5">Start cook mode →</div>
                 </div>
               </Link>
             ) : (
