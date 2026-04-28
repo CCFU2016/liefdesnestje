@@ -13,6 +13,7 @@ type Member = {
   displayName: string;
   color: string;
   role: "owner" | "member";
+  avatarUrl?: string | null;
 };
 
 type Account = {
@@ -480,6 +481,42 @@ function YouEditor({ me, takenColors }: { me: Member; takenColors: string[] }) {
   const [color, setColor] = useState(me.color);
   const [editingName, setEditingName] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(me.avatarUrl ?? null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  const uploadAvatar = async (file: File) => {
+    setAvatarBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/me/avatar", { method: "POST", body: fd });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? "Upload failed");
+      }
+      const data = (await res.json()) as { avatarUrl: string };
+      setAvatarUrl(data.avatarUrl);
+      toast.success("Avatar updated.");
+      // Sidebar avatar reads from the server component too — refresh.
+      setTimeout(() => window.location.reload(), 300);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't upload");
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    if (!confirm("Remove avatar and go back to the colored circle?")) return;
+    setAvatarBusy(true);
+    try {
+      await fetch("/api/me/avatar", { method: "DELETE" });
+      setAvatarUrl(null);
+      setTimeout(() => window.location.reload(), 300);
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
 
   const save = async (body: { displayName?: string; color?: string }) => {
     setBusy(true);
@@ -509,6 +546,52 @@ function YouEditor({ me, takenColors }: { me: Member; takenColors: string[] }) {
 
   return (
     <div className="space-y-4">
+      <div className="space-y-1.5">
+        <p className="text-xs uppercase tracking-wider text-zinc-500">Avatar</p>
+        <div className="flex items-center gap-3">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-12 w-12 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className="inline-block h-12 w-12 rounded-full"
+              style={{ background: color }}
+              aria-label="No avatar — using your color"
+            />
+          )}
+          <label className="inline-flex">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAvatar(f);
+                e.target.value = "";
+              }}
+              disabled={avatarBusy}
+            />
+            <span
+              className={`inline-flex items-center justify-center h-9 px-3 rounded-md border border-zinc-200 bg-white text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800 cursor-pointer ${avatarBusy ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+              {avatarBusy ? "Uploading…" : avatarUrl ? "Replace" : "Upload"}
+            </span>
+          </label>
+          {avatarUrl && (
+            <Button size="sm" variant="ghost" onClick={removeAvatar} disabled={avatarBusy}>
+              Remove
+            </Button>
+          )}
+        </div>
+        <p className="text-[11px] text-zinc-500">
+          JPEG, PNG, GIF, or WebP. Falls back to your colored circle when no avatar is set.
+        </p>
+      </div>
+
       <div className="space-y-1.5">
         <p className="text-xs uppercase tracking-wider text-zinc-500">Display name</p>
         {editingName ? (

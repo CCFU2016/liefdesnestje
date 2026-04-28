@@ -30,7 +30,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar
         user={{
           name: member.displayName,
-          image: session.user.image ?? null,
+          // Prefer the uploaded household avatar over the Google profile
+          // image — Settings → You → Avatar overrides the auto-fetched one.
+          image: member.avatarUrl ?? session.user.image ?? null,
           color: member.color,
         }}
       />

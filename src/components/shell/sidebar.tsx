@@ -45,7 +45,19 @@ export function Sidebar({
     <aside className="hidden md:flex h-screen w-60 flex-col border-r border-zinc-200 bg-white px-3 py-4 dark:border-zinc-800 dark:bg-zinc-950">
       <div className="px-2 pb-4">
         <Link href="/today" className="flex items-center gap-2">
-          <span className="inline-block h-6 w-6 rounded-full" style={{ background: user.color }} />
+          {user.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={user.image}
+              alt=""
+              className="h-6 w-6 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className="inline-block h-6 w-6 rounded-full"
+              style={{ background: user.color }}
+            />
+          )}
           <span className="font-semibold tracking-tight">Liefdesnestje</span>
         </Link>
       </div>
