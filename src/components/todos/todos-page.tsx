@@ -183,7 +183,7 @@ export function TodosPage({
   };
 
   return (
-    <div className="mx-auto max-w-5xl p-4 md:p-8">
+    <>
       <CommandBar lists={lists} onQuickAdd={quickAdd} />
 
       <div className="flex gap-6">
@@ -296,7 +296,7 @@ export function TodosPage({
           </Card>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
