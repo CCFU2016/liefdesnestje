@@ -90,6 +90,7 @@ export const householdMembers = pgTable(
     role: householdRoleEnum("role").notNull().default("member"),
     displayName: text("display_name").notNull(),
     color: varchar("color", { length: 7 }).notNull(), // hex, e.g. #4f46e5
+    avatarUrl: text("avatar_url"), // optional uploaded avatar; falls back to color chip
     joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -447,6 +448,65 @@ export const eventDocuments = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [index("event_documents_holiday_idx").on(t.holidayId)]
+);
+
+// Recurring household chores — schedule lives in `daysOfWeek` (0..6 with
+// 0 = Sunday, matching JS Date#getDay), optional starts/ends date window,
+// per-chore points value (snapshotted at completion time on every run).
+export const recurringChores = pgTable(
+  "recurring_chores",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    daysOfWeek: integer("days_of_week").array().notNull(),
+    startsOn: text("starts_on"), // YYYY-MM-DD; nullable = no lower bound
+    endsOn: text("ends_on"),
+    pointsValue: integer("points_value").notNull().default(1),
+    rollsOver: boolean("rolls_over").notNull().default(false),
+    // Set to today when rollsOver flips false→true. Carryover only counts
+    // missed dates ≥ this — so toggling rolls_over on doesn't dump
+    // historical "debt" onto the user.
+    rollsOverSince: text("rolls_over_since"),
+    visibility: visibilityEnum("visibility").notNull().default("shared"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("recurring_chores_household_idx").on(t.householdId)]
+);
+
+// One row per (chore, date) the chore was actually done. The unique
+// constraint kills double-credit races at the DB level — concurrent
+// "complete" clicks turn into a single row. pointsAwarded snapshots the
+// chore's pointsValue at completion time so retroactively bumping a
+// chore's value doesn't backdate every prior completion.
+export const recurringChoreCompletions = pgTable(
+  "recurring_chore_completions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    choreId: uuid("chore_id")
+      .notNull()
+      .references(() => recurringChores.id, { onDelete: "cascade" }),
+    completedById: uuid("completed_by_id")
+      .notNull()
+      .references(() => users.id),
+    completedOn: text("completed_on").notNull(), // YYYY-MM-DD in Europe/Amsterdam
+    completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    pointsAwarded: integer("points_awarded").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("recurring_chore_completions_chore_date_unique").on(t.choreId, t.completedOn),
+    index("recurring_chore_completions_chore_idx").on(t.choreId),
+    index("recurring_chore_completions_user_date_idx").on(t.completedById, t.completedOn),
+  ]
 );
 
 // Travel reservations attached to an event (via holidayId). A single event
