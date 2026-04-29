@@ -4,8 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChefHat, Edit, ExternalLink, Sparkles, Star, Trash2 } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { CalendarPlus, ChefHat, Edit, ExternalLink, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Ingredient = { quantity: string | null; unit: string | null; name: string; notes: string | null };
@@ -69,6 +71,7 @@ export function RecipeDetailClient({
     }
   };
 
+  const [planDialog, setPlanDialog] = useState(false);
   const [estimatingNutrition, setEstimatingNutrition] = useState(false);
   const estimateMacros = async () => {
     setEstimatingNutrition(true);
@@ -189,13 +192,23 @@ export function RecipeDetailClient({
         </div>
       )}
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap gap-2">
         <Link href={`/meals/recipes/${recipe.id}/cook`}>
           <Button className="gap-2">
             <ChefHat className="h-4 w-4" /> Start cook mode
           </Button>
         </Link>
+        <Button variant="secondary" className="gap-2" onClick={() => setPlanDialog(true)}>
+          <CalendarPlus className="h-4 w-4" /> Plan for a day
+        </Button>
       </div>
+      {planDialog && (
+        <PlanForDayDialog
+          recipeId={recipe.id}
+          recipeTitle={recipe.title}
+          onClose={() => setPlanDialog(false)}
+        />
+      )}
 
       <div className="grid md:grid-cols-[1fr_2fr] gap-6">
         <Card>
@@ -290,5 +303,78 @@ export function RecipeDetailClient({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Pick a date and POST a meal_plan_entry for this recipe. Doesn't replace
+// whatever's already on that date — the meals page can still hold multiple
+// entries per day. Closes on success and toasts a deep-link to the meals
+// week so the user can verify it landed where they expected.
+function PlanForDayDialog({
+  recipeId,
+  recipeTitle,
+  onClose,
+}: {
+  recipeId: string;
+  recipeTitle: string;
+  onClose: () => void;
+}) {
+  // Default to today in the viewer's local zone (matches the meals page,
+  // which keys entries by YYYY-MM-DD without time).
+  const todayLocal = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const defaultYmd = `${todayLocal.getFullYear()}-${pad(todayLocal.getMonth() + 1)}-${pad(todayLocal.getDate())}`;
+
+  const [date, setDate] = useState(defaultYmd);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!date) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/meals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date, recipeId }),
+      });
+      if (!res.ok) {
+        const b = await res.json().catch(() => ({}));
+        throw new Error(b.error ?? "Save failed");
+      }
+      toast.success(`Planned ${recipeTitle} for ${date}.`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+          <Dialog.Title className="text-lg font-semibold">Plan for a day</Dialog.Title>
+          <Dialog.Description className="text-sm text-zinc-500 mt-1">
+            Adds <span className="font-medium">{recipeTitle}</span> to the meal plan.
+          </Dialog.Description>
+
+          <div className="mt-4 space-y-1.5">
+            <label className="text-xs text-zinc-500">Date</label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={busy || !date}>
+              {busy ? "Saving…" : "Plan"}
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -31,7 +31,16 @@ export function Header({ unreadCount = 0 }: { unreadCount?: number }) {
         )}
       </Link>
       <form action={signOutAction}>
-        <Button type="submit" variant="ghost" size="icon" aria-label="Sign out" title="Sign out">
+        <Button
+          type="submit"
+          variant="ghost"
+          size="icon"
+          aria-label="Sign out"
+          title="Sign out"
+          onClick={(e) => {
+            if (!confirm("Sign out?")) e.preventDefault();
+          }}
+        >
           <LogOut className="h-4 w-4" />
         </Button>
       </form>
