@@ -585,6 +585,10 @@ export const photoOfTheDay = pgTable(
     latitude: text("latitude"), // stored as text to dodge float rounding
     longitude: text("longitude"),
     locationName: text("location_name"),
+    // Original derivative dimensions so the card can reserve the right
+    // aspect-ratio space and avoid layout shift on first paint.
+    width: integer("width"),
+    height: integer("height"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [

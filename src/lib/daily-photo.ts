@@ -129,6 +129,8 @@ export async function getOrPickDailyPhoto(
   // rather than picking a derivative up-front and hoping its URL is there.
   let bytes: Uint8Array;
   let mime: string;
+  let chosenWidth: number | null = null;
+  let chosenHeight: number | null = null;
   try {
     console.log("[daily-photo] fetching asset URLs");
     const urlBundle = await fetchAssetUrls(baseUrl, [picked.photoGuid]);
@@ -161,6 +163,8 @@ export async function getOrPickDailyPhoto(
     // Prefer widest <= 2048, else smallest available (still real).
     const under = available.find((c) => c.width <= 2048);
     const chosen = under ?? available[available.length - 1];
+    chosenWidth = chosen.width || null;
+    chosenHeight = chosen.height || null;
     console.log("[daily-photo] downloading derivative", chosen.label, `${chosen.width}x${chosen.height}`);
 
     const downloaded = await downloadAsset(chosen.url);
@@ -226,6 +230,8 @@ export async function getOrPickDailyPhoto(
       latitude,
       longitude,
       locationName,
+      width: chosenWidth,
+      height: chosenHeight,
     })
     .onConflictDoNothing()
     .returning();

@@ -27,6 +27,8 @@ export async function GET() {
           locationName: photo.locationName,
           latitude: photo.latitude,
           longitude: photo.longitude,
+          width: photo.width,
+          height: photo.height,
         },
       },
       { headers: NO_STORE }

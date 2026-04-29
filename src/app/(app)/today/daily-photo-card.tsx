@@ -14,6 +14,8 @@ type PhotoPayload = {
     locationName: string | null;
     latitude: string | null;
     longitude: string | null;
+    width: number | null;
+    height: number | null;
   } | null;
 };
 
@@ -29,7 +31,7 @@ export function DailyPhotoCard() {
   // placeholder card, so the slot is invisible unless there's content.
   if (!data?.photo) return null;
 
-  const { url, caption, contributor, takenAt, locationName, latitude, longitude } = data.photo;
+  const { url, caption, contributor, takenAt, locationName, latitude, longitude, width, height } = data.photo;
   const takenDate =
     takenAt && !Number.isNaN(new Date(takenAt).getTime())
       ? new Date(takenAt).toLocaleDateString(undefined, {
@@ -45,11 +47,18 @@ export function DailyPhotoCard() {
 
   return (
     <Card className="overflow-hidden">
+      {/* Width fills the tile; height = whatever the photo's natural ratio
+          gives us. width/height attributes are the original derivative
+          dimensions so the browser reserves the right aspect-ratio space
+          before the bytes arrive — no layout jump on first paint, and
+          portrait photos render full-frame instead of having heads cropped. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={url}
         alt={caption ?? "Photo of the day"}
-        className="w-full aspect-[4/3] object-cover"
+        width={width ?? undefined}
+        height={height ?? undefined}
+        className="block w-full h-auto"
       />
       <div className="p-3 space-y-1">
         <div className="text-[10px] uppercase tracking-wider text-zinc-500">
