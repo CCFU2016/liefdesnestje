@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { deleteEvent as msDeleteEvent, updateEvent as msUpdateEvent } from "@/lib/microsoft/graph";
 import { deleteEvent as gcalDeleteEvent, updateEvent as gcalUpdateEvent } from "@/lib/google/api";
 
@@ -24,7 +24,7 @@ async function loadEventForCaller(
   const ev = (await db.select().from(events).where(eq(events.id, id)).limit(1))[0];
   if (!ev) return null;
   if (ev.householdId !== ctx.householdId) return null;
-  if (ev.visibility === "private" && ev.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(ev, ctx)) return null;
   if (ev.deletedAt) return null;
   return ev;
 }

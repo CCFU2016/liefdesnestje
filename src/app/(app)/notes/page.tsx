@@ -1,7 +1,7 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, visibleToFilter } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { notes } from "@/lib/db/schema";
-import { and, eq, isNull, or, desc } from "drizzle-orm";
+import { and, eq, isNull, desc } from "drizzle-orm";
 import { NotesPage } from "@/components/notes/notes-page";
 
 export default async function Notes() {
@@ -20,7 +20,7 @@ export default async function Notes() {
       and(
         eq(notes.householdId, ctx.householdId),
         isNull(notes.deletedAt),
-        or(eq(notes.visibility, "shared"), eq(notes.authorId, ctx.userId))
+        visibleToFilter(ctx, notes)
       )
     )
     .orderBy(desc(notes.pinned), desc(notes.updatedAt));

@@ -4,7 +4,7 @@ import { join, normalize } from "node:path";
 import { db } from "@/lib/db";
 import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { DOC_MIME_TYPES, MAX_DOC_BYTES, UPLOAD_ROOT, saveUpload } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
 
@@ -13,7 +13,7 @@ export const maxDuration = 60;
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   return h;
 }
 

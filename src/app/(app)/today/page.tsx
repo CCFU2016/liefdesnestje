@@ -1,4 +1,4 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, visibleToFilter } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import {
   calendars,
@@ -50,7 +50,7 @@ export default async function TodayPage({
           isNull(events.deletedAt),
           gte(events.endsAt, dayStart),
           lte(events.startsAt, dayEnd),
-          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId)),
+          visibleToFilter(ctx, events),
           or(
             isNull(events.calendarId),
             and(eq(calendars.syncEnabled, true), eq(calendars.showOnToday, true))
@@ -72,7 +72,7 @@ export default async function TodayPage({
           eq(mealPlanEntries.householdId, ctx.householdId),
           isNull(mealPlanEntries.deletedAt),
           eq(mealPlanEntries.date, today),
-          or(eq(mealPlanEntries.visibility, "shared"), eq(mealPlanEntries.authorId, ctx.userId))
+          visibleToFilter(ctx, mealPlanEntries)
         )
       )
       .limit(1),
@@ -86,7 +86,7 @@ export default async function TodayPage({
         and(
           eq(holidays.householdId, ctx.householdId),
           isNull(holidays.deletedAt),
-          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId)),
+          visibleToFilter(ctx, holidays),
           or(
             gte(holidays.startsOn, today),
             and(lte(holidays.startsOn, today), gte(holidays.endsOn, today))
@@ -222,7 +222,7 @@ export default async function TodayPage({
             inArray(todos.listId, listIds),
             isNull(todos.deletedAt),
             isNull(todos.completedAt),
-            or(eq(todos.visibility, "shared"), eq(todos.authorId, ctx.userId))
+            visibleToFilter(ctx, todos)
           )
         )
         .orderBy(todos.sortOrder)

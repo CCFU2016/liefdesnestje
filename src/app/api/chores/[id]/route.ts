@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recurringChores } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { todayInAmsterdam } from "@/lib/chores/schedule";
 
 const patchSchema = z
@@ -41,7 +41,7 @@ async function loadForCaller(
   if (!c) return null;
   if (c.householdId !== ctx.householdId) return null;
   if (c.deletedAt) return null;
-  if (c.visibility === "private" && c.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(c, ctx)) return null;
   return c;
 }
 

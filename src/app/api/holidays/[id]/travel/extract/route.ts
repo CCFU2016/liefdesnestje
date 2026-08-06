@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import {
   ClaudeNotConfiguredError,
   ExtractionBudgetError,
@@ -26,7 +26,7 @@ type AllowedMime = (typeof ALLOWED_MIMES)[number];
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   return h;
 }
 

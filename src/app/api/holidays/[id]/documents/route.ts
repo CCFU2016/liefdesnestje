@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { eventDocuments, holidays } from "@/lib/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { MAX_DOC_BYTES, saveUpload } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
 
@@ -35,7 +35,7 @@ async function loadForCaller(
 ) {
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   return h;
 }
 

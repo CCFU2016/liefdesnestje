@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { recipes, recipeFavorites } from "@/lib/db/schema";
-import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { and, desc, eq, ilike, isNull, sql } from "drizzle-orm";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 import { estimateNutrition } from "@/lib/claude";
 
 const ingredientSchema = z.object({
@@ -48,14 +48,14 @@ export async function GET(req: Request) {
     const base = and(
       eq(recipes.householdId, ctx.householdId),
       isNull(recipes.deletedAt),
-      or(eq(recipes.visibility, "shared"), eq(recipes.authorId, ctx.userId))
+      visibleToFilter(ctx, recipes)
     );
 
     const conditions = [base];
     if (q) conditions.push(ilike(recipes.title, `%${q}%`));
     if (tag) conditions.push(sql`${tag} = ANY(${recipes.tags})`);
 
-    let rows = await db
+    const rows = await db
       .select({
         id: recipes.id,
         title: recipes.title,

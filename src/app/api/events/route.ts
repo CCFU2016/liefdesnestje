@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 import { createEvent as msCreateEvent } from "@/lib/microsoft/graph";
 import { createEvent as gcalCreateEvent } from "@/lib/google/api";
 
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
           isNull(events.deletedAt),
           gte(events.endsAt, fromDate),
           lte(events.startsAt, toDate),
-          or(eq(events.visibility, "shared"), eq(events.authorId, ctx.userId)),
+          visibleToFilter(ctx, events),
           or(isNull(events.calendarId), eq(calendars.syncEnabled, true))
         )
       )

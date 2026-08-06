@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { externalCalendarAccounts, holidays, householdMembers } from "@/lib/db/schema";
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 import { pushHolidayToCalendar } from "@/lib/calendar-push";
 import { ensureDefaultCategories } from "@/lib/event-categories";
 
@@ -31,7 +31,7 @@ export async function GET() {
         and(
           eq(holidays.householdId, ctx.householdId),
           isNull(holidays.deletedAt),
-          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId))
+          visibleToFilter(ctx, holidays)
         )
       )
       .orderBy(asc(holidays.startsOn));

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { holidays, householdMembers, travelReservations } from "@/lib/db/schema";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 const reservationKinds = [
   "hotel",
@@ -36,7 +36,7 @@ async function loadHolidayForCaller(
 ) {
   const h = (await db.select().from(holidays).where(eq(holidays.id, holidayId)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   return h;
 }
 

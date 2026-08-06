@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { todoLists, todos } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { nextTodoOccurrence } from "@/lib/recurrence";
 
 const patchSchema = z.object({
@@ -22,7 +22,7 @@ async function getTodoForCaller(id: string, ctx: Awaited<ReturnType<typeof requi
   if (!t) return null;
   const list = (await db.select().from(todoLists).where(eq(todoLists.id, t.listId)).limit(1))[0];
   if (!list || list.householdId !== ctx.householdId) return null;
-  if (t.visibility === "private" && t.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(t, ctx)) return null;
   return t;
 }
 

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { db } from "@/lib/db";
 import { eventDocuments, holidays } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
 async function loadForCaller(
@@ -14,7 +14,7 @@ async function loadForCaller(
 ) {
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   const d = (
     await db
       .select()

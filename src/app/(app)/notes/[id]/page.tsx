@@ -1,4 +1,4 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, isVisibleTo } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { notes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -14,7 +14,7 @@ export default async function NoteDetailPage({
   const ctx = await requireHouseholdMember();
   const note = (await db.select().from(notes).where(eq(notes.id, id)).limit(1))[0];
   if (!note || note.householdId !== ctx.householdId || note.deletedAt) notFound();
-  if (note.visibility === "private" && note.authorId !== ctx.userId) notFound();
+  if (!isVisibleTo(note, ctx)) notFound();
 
   return (
     <NoteEditor

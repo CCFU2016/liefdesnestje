@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { recipes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import {
   ClaudeNotConfiguredError,
   ExtractionBudgetError,
@@ -20,7 +20,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!r || r.householdId !== ctx.householdId || r.deletedAt) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (r.visibility === "private" && r.authorId !== ctx.userId) {
+    if (!isVisibleTo(r, ctx)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

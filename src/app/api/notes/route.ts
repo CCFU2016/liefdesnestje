@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { notes } from "@/lib/db/schema";
 import { and, eq, isNull, or, desc, sql } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 
 export async function GET(req: Request) {
   try {
@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const base = and(
       eq(notes.householdId, ctx.householdId),
       isNull(notes.deletedAt),
-      or(eq(notes.visibility, "shared"), eq(notes.authorId, ctx.userId))
+      visibleToFilter(ctx, notes)
     );
 
     if (q) {

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { holidays, householdMembers } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import {
   deletePushedHoliday,
   pushHolidayToCalendar,
@@ -27,7 +27,7 @@ async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireH
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h) return null;
   if (h.householdId !== ctx.householdId) return null;
-  if (h.visibility === "private" && h.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(h, ctx)) return null;
   if (h.deletedAt) return null;
   return h;
 }

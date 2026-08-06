@@ -4,7 +4,7 @@ import { join, normalize } from "node:path";
 import { db } from "@/lib/db";
 import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { UPLOAD_ROOT } from "@/lib/uploads";
 
 // Auth-gated serve for per-event travel docs (PDFs / reservation screenshots).
@@ -19,7 +19,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!h || h.householdId !== ctx.householdId || h.deletedAt) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (h.visibility === "private" && h.authorId !== ctx.userId) {
+    if (!isVisibleTo(h, ctx)) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

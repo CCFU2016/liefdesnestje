@@ -1,4 +1,4 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, isVisibleTo } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { recipeFavorites, recipes } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -14,7 +14,7 @@ export default async function RecipeDetailPage({
   const ctx = await requireHouseholdMember();
   const r = (await db.select().from(recipes).where(eq(recipes.id, id)).limit(1))[0];
   if (!r || r.householdId !== ctx.householdId || r.deletedAt) notFound();
-  if (r.visibility === "private" && r.authorId !== ctx.userId) notFound();
+  if (!isVisibleTo(r, ctx)) notFound();
 
   const fav = (
     await db

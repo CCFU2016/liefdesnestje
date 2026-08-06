@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { notes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 const patchSchema = z.object({
   title: z.string().max(200).optional(),
@@ -17,7 +17,7 @@ async function getNoteForCaller(id: string, ctx: Awaited<ReturnType<typeof requi
   const n = (await db.select().from(notes).where(eq(notes.id, id)).limit(1))[0];
   if (!n) return null;
   if (n.householdId !== ctx.householdId) return null;
-  if (n.visibility === "private" && n.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(n, ctx)) return null;
   if (n.deletedAt) return null;
   return n;
 }

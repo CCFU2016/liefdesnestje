@@ -1,4 +1,4 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, visibleToFilter } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import {
   eventCategories,
@@ -6,7 +6,7 @@ import {
   holidays,
   householdMembers,
 } from "@/lib/db/schema";
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import { ensureDefaultCategories } from "@/lib/event-categories";
 import { EventsClient } from "./client";
 
@@ -22,7 +22,7 @@ export default async function EventsPage() {
         and(
           eq(holidays.householdId, ctx.householdId),
           isNull(holidays.deletedAt),
-          or(eq(holidays.visibility, "shared"), eq(holidays.authorId, ctx.userId))
+          visibleToFilter(ctx, holidays)
         )
       )
       .orderBy(asc(holidays.startsOn)),

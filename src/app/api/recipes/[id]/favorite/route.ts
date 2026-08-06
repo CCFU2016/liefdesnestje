@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { recipeFavorites, recipes } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 async function loadRecipe(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
   const r = (await db.select().from(recipes).where(eq(recipes.id, id)).limit(1))[0];
   if (!r || r.householdId !== ctx.householdId || r.deletedAt) return null;
-  if (r.visibility === "private" && r.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(r, ctx)) return null;
   return r;
 }
 

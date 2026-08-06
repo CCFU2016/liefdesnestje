@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { mealPlanEntries, recipes } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 const patchSchema = z.object({
   recipeId: z.string().uuid().nullable().optional(),
@@ -21,7 +21,7 @@ const patchSchema = z.object({
 async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireHouseholdMember>>) {
   const e = (await db.select().from(mealPlanEntries).where(eq(mealPlanEntries.id, id)).limit(1))[0];
   if (!e || e.householdId !== ctx.householdId || e.deletedAt) return null;
-  if (e.visibility === "private" && e.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(e, ctx)) return null;
   return e;
 }
 

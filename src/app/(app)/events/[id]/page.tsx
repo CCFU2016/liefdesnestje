@@ -1,4 +1,4 @@
-import { requireHouseholdMember } from "@/lib/auth/household";
+import { requireHouseholdMember, isVisibleTo } from "@/lib/auth/household";
 import { db } from "@/lib/db";
 import { eventCategories, holidays, householdMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -20,7 +20,7 @@ export default async function EventDetailPage({
   const ctx = await requireHouseholdMember();
   const h = (await db.select().from(holidays).where(eq(holidays.id, id)).limit(1))[0];
   if (!h || h.householdId !== ctx.householdId || h.deletedAt) notFound();
-  if (h.visibility === "private" && h.authorId !== ctx.userId) notFound();
+  if (!isVisibleTo(h, ctx)) notFound();
 
   const members = await db
     .select({

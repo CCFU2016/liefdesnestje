@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { todoLists, todos } from "@/lib/db/schema";
-import { and, eq, isNull, or } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { and, eq, isNull } from "drizzle-orm";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 
 const createSchema = z.object({
   listId: z.string().uuid(),
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
         and(
           eq(todos.listId, listId),
           isNull(todos.deletedAt),
-          or(eq(todos.visibility, "shared"), eq(todos.authorId, ctx.userId))
+          visibleToFilter(ctx, todos)
         )
       )
       .orderBy(todos.sortOrder, todos.createdAt);

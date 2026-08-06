@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recurringChoreCompletions, recurringChores } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 const completeSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -19,7 +19,7 @@ async function loadChore(
   if (!c) return null;
   if (c.householdId !== ctx.householdId) return null;
   if (c.deletedAt) return null;
-  if (c.visibility === "private" && c.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(c, ctx)) return null;
   return c;
 }
 

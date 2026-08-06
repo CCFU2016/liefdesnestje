@@ -3,6 +3,10 @@ import { db } from "@/lib/db";
 import { householdMembers } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
+// Pure helpers live in ./visibility (importable from unit tests without
+// dragging in NextAuth/db); re-exported here so routes have one import.
+export { isVisibleTo, visibleToFilter } from "./visibility";
+
 export type HouseholdContext = {
   userId: string;
   householdId: string;

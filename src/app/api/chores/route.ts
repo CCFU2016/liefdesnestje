@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recurringChoreCompletions, recurringChores } from "@/lib/db/schema";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
 import {
   choreOccursOn,
   missedDatesForCarryover,
@@ -53,10 +53,7 @@ export async function GET(req: Request) {
         and(
           eq(recurringChores.householdId, ctx.householdId),
           isNull(recurringChores.deletedAt),
-          or(
-            eq(recurringChores.visibility, "shared"),
-            eq(recurringChores.authorId, ctx.userId)
-          )
+          visibleToFilter(ctx, recurringChores)
         )
       )
       .orderBy(asc(recurringChores.title));

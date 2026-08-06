@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { recipes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 
 const ingredientSchema = z.object({
   quantity: z.string().nullable().optional(),
@@ -42,7 +42,7 @@ async function loadForCaller(id: string, ctx: Awaited<ReturnType<typeof requireH
   const r = (await db.select().from(recipes).where(eq(recipes.id, id)).limit(1))[0];
   if (!r) return null;
   if (r.householdId !== ctx.householdId) return null;
-  if (r.visibility === "private" && r.authorId !== ctx.userId) return null;
+  if (!isVisibleTo(r, ctx)) return null;
   if (r.deletedAt) return null;
   return r;
 }
