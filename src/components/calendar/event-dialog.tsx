@@ -25,6 +25,8 @@ type EventRow = {
   location: string | null;
   calendarId: string | null;
   visibility: "private" | "shared";
+  organizerName?: string | null;
+  organizerEmail?: string | null;
 };
 
 export function EventDialog({
@@ -133,6 +135,17 @@ export function EventDialog({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
           <Dialog.Title className="text-lg font-semibold">{editing ? "Edit event" : "New event"}</Dialog.Title>
+          {initialEvent && (initialEvent.organizerName || initialEvent.organizerEmail) && (
+            <p className="mt-1 text-xs text-zinc-500">
+              Invited by{" "}
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                {initialEvent.organizerName ?? initialEvent.organizerEmail}
+              </span>
+              {initialEvent.organizerName && initialEvent.organizerEmail && (
+                <> ({initialEvent.organizerEmail})</>
+              )}
+            </p>
+          )}
           <div className="mt-4 space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="title">Title</Label>

@@ -85,6 +85,7 @@ export type GcalEvent = {
   summary?: string;
   description?: string;
   location?: string;
+  organizer?: { email?: string; displayName?: string; self?: boolean };
   start?: GcalDateTime;
   end?: GcalDateTime;
   recurrence?: string[]; // RRULE strings

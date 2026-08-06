@@ -81,6 +81,8 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
     const incoming: Array<{
       externalId: string; // either UID or UID:occurrence
       title: string;
+      organizerName: string | null;
+      organizerEmail: string | null;
       description: string | null;
       startsAt: Date;
       endsAt: Date;
@@ -101,6 +103,9 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
       const description = (vevent.description as string | undefined) ?? null;
       const location = (vevent.location as string | undefined) ?? null;
       const allDay = isAllDay(vevent.start, vevent.end);
+      const { organizerName, organizerEmail } = parseOrganizer(
+        vevent.organizer as unknown
+      );
       const timezone =
         ((vevent.start as Date & { tz?: string }).tz as string | undefined) ?? "UTC";
 
@@ -121,9 +126,9 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
             description,
             startsAt: occ,
             endsAt: new Date(occ.getTime() + durationMs),
-            allDay,
-            location,
-            timezone,
+            allDay,            location,            timezone,
+            organizerName,
+            organizerEmail,
           });
         }
       } else {
@@ -137,9 +142,9 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
           description,
           startsAt: start,
           endsAt: end,
-          allDay,
-          location,
-          timezone,
+          allDay,          location,          timezone,
+          organizerName,
+          organizerEmail,
         });
       }
     }
@@ -167,6 +172,8 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
             allDay: ev.allDay,
             location: ev.location,
             timezone: ev.timezone,
+            organizerName: ev.organizerName,
+            organizerEmail: ev.organizerEmail,
             updatedAt: new Date(),
             deletedAt: null,
           })
@@ -183,6 +190,8 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
           allDay: ev.allDay,
           location: ev.location,
           timezone: ev.timezone,
+          organizerName: ev.organizerName,
+          organizerEmail: ev.organizerEmail,
           externalId: ev.externalId,
           visibility: "shared",
         });
@@ -220,6 +229,21 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
       .where(eq(calendars.id, calendarId));
     throw e;
   }
+}
+
+function parseOrganizer(raw: unknown): {
+  organizerName: string | null;
+  organizerEmail: string | null;
+} {
+  if (!raw) return { organizerName: null, organizerEmail: null };
+  if (typeof raw === "string") {
+    return { organizerName: null, organizerEmail: raw.replace(/^mailto:/i, "") || null };
+  }
+  const obj = raw as { params?: { CN?: string }; val?: string };
+  return {
+    organizerName: obj.params?.CN ?? null,
+    organizerEmail: obj.val ? obj.val.replace(/^mailto:/i, "") : null,
+  };
 }
 
 function isAllDay(start: unknown, end: unknown): boolean {

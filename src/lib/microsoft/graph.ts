@@ -91,6 +91,7 @@ export type MsEvent = {
   isAllDay: boolean;
   isCancelled?: boolean;
   location?: { displayName?: string };
+  organizer?: { emailAddress?: { name?: string; address?: string } };
   originalStartTimeZone?: string;
   recurrence?: unknown;
   type?: "singleInstance" | "occurrence" | "exception" | "seriesMaster";

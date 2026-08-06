@@ -4,6 +4,22 @@ The last 20 things shipped, newest first. Each entry is a user-facing change; ro
 
 ---
 
+## 0c. Bucket list
+
+New **Bucket list** section, last in the menu. Create categories (travel, movies to watch, …), add dreams with notes and any number of links, and both of you rate each item 1–5 stars — your stars are amber and clickable, your partner's show in their member color. Items sort by combined star count (most-wanted first), can be ticked off (🎉) and put back, and deleting a category keeps its items as "uncategorized" so nothing is ever lost. Three new tables (`bucket_list_categories`, `bucket_list_items`, `bucket_list_stars`); ratings upsert per (item, member).
+
+## 0d. See who sent a calendar invite
+
+Clicking a synced calendar event now shows **"Invited by ⟨name⟩ (email)"** under the dialog title. The organizer is captured from Microsoft Graph, Google Calendar, and ICS feeds (`ORGANIZER` property) into two new columns on `events`; the migration clears every calendar's delta/sync tokens so the next sync backfills organizers on existing events.
+
+## 0a. Edit an event from its own page
+
+The event detail page now has a proper **Edit** button (next to the countdown) instead of the old "Edit from the list" link. It opens the same dialog the events list uses — title, dates, people, category, calendar push, private toggle, document — and saves in place. Deleting from the dialog returns you to the events list. Only the event's author sees the button, matching the list behavior.
+
+## 0b. Dismiss chores nobody did
+
+Uncompleted chores (today's and carried-over ones) have a small **✕ dismiss** button: "nobody did this one, stop nagging." A dismissed occurrence awards 0 points, stays off the leaderboard (points *and* completion count), and shows as a grey "Skipped by Niki" row that can be undone like a normal completion. Backed by a new `skipped` column on chore completions; the same unique (chore, date) row means a dismiss and a real completion can't double-book a day.
+
 ## 1. Attach multiple documents to any event
 
 Every event page now has a **Documents** card. Any event author can attach PDFs or images (JPEG / PNG / GIF / WebP, up to 10MB each) via an Attach button. Files are magic-byte sniffed, saved to the Volume under `holidays/<eventId>/docs/`, and served through an auth-gated endpoint. Each attachment has a trash button for quick removal. The old single-document field still renders as a read-only row at the top of the list so nothing disappears retroactively.

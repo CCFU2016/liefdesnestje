@@ -88,6 +88,8 @@ export async function syncCalendarEvents(
           allDay: mapped.allDay,
           location: mapped.location,
           timezone: mapped.timezone,
+          organizerName: mapped.organizerName,
+          organizerEmail: mapped.organizerEmail,
           etag: e["@odata.etag"] ?? null,
           updatedAt: new Date(),
           deletedAt: null,
@@ -105,6 +107,8 @@ export async function syncCalendarEvents(
         allDay: mapped.allDay,
         location: mapped.location,
         timezone: mapped.timezone,
+        organizerName: mapped.organizerName,
+        organizerEmail: mapped.organizerEmail,
         externalId: e.id,
         etag: e["@odata.etag"] ?? null,
         visibility: "shared",
@@ -131,6 +135,8 @@ function mapMsToLocal(e: MsEvent) {
     allDay: !!e.isAllDay,
     location: e.location?.displayName ?? null,
     timezone: e.start.timeZone ?? "UTC",
+    organizerName: e.organizer?.emailAddress?.name ?? null,
+    organizerEmail: e.organizer?.emailAddress?.address ?? null,
   };
 }
 

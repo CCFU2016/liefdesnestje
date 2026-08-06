@@ -45,6 +45,8 @@ type EventRow = {
   calendarId: string | null;
   authorId: string;
   visibility: "private" | "shared";
+  organizerName?: string | null;
+  organizerEmail?: string | null;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());

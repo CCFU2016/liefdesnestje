@@ -88,6 +88,8 @@ export async function syncCalendarEvents(
           allDay: mapped.allDay,
           location: mapped.location,
           timezone: mapped.timezone,
+          organizerName: mapped.organizerName,
+          organizerEmail: mapped.organizerEmail,
           etag: e.etag ?? null,
           updatedAt: new Date(),
           deletedAt: null,
@@ -105,6 +107,8 @@ export async function syncCalendarEvents(
         allDay: mapped.allDay,
         location: mapped.location,
         timezone: mapped.timezone,
+        organizerName: mapped.organizerName,
+        organizerEmail: mapped.organizerEmail,
         externalId: e.id,
         etag: e.etag ?? null,
         visibility: "shared",
@@ -134,6 +138,8 @@ function mapGcalToLocal(e: GcalEvent) {
     allDay,
     location: e.location ?? null,
     timezone,
+    organizerName: e.organizer?.displayName ?? null,
+    organizerEmail: e.organizer?.email ?? null,
   };
 }
 
