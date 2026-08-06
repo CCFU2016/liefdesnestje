@@ -43,8 +43,15 @@ export function EventDialog({
   initialSlot: { start: Date; end: Date } | null;
 }) {
   const editing = !!initialEvent;
-  const start = initialEvent ? new Date(initialEvent.startsAt) : initialSlot?.start ?? new Date();
-  const end = initialEvent ? new Date(initialEvent.endsAt) : initialSlot?.end ?? new Date(Date.now() + 60 * 60 * 1000);
+  // Seed dates once at mount (the dialog is remounted per event/slot, and the
+  // form state below only reads them at mount anyway). Lazy useState keeps the
+  // impure `new Date()` out of render.
+  const [{ start, end }] = useState(() => ({
+    start: initialEvent ? new Date(initialEvent.startsAt) : initialSlot?.start ?? new Date(),
+    end: initialEvent
+      ? new Date(initialEvent.endsAt)
+      : initialSlot?.end ?? new Date(Date.now() + 60 * 60 * 1000),
+  }));
 
   const [title, setTitle] = useState(initialEvent?.title ?? "");
   const [description, setDescription] = useState(initialEvent?.description ?? "");

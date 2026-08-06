@@ -5,7 +5,7 @@ import { encrypt } from "@/lib/auth/encryption";
 import { db } from "@/lib/db";
 import { externalCalendarAccounts } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { getMe } from "@/lib/microsoft/graph";
+import {  } from "@/lib/microsoft/graph";
 import { subscribeCalendar, syncCalendarEvents, syncCalendarList } from "@/lib/microsoft/sync";
 import { calendars } from "@/lib/db/schema";
 import { requireHouseholdMember } from "@/lib/auth/household";

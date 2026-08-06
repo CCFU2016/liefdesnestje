@@ -49,10 +49,6 @@ type EventRow = {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-function isMobile() {
-  return typeof window !== "undefined" && window.innerWidth < 768;
-}
-
 // Best-effort: infer "current user id" from the list of accounts passed in.
 // Since /api/calendars returns writable=true only for the caller's accounts,
 // this is just used as a secondary guard and no longer strictly necessary.
@@ -117,12 +113,13 @@ export function CalendarShell({
     [onMobile]
   );
 
-  // Default scroll position: 8 AM
-  const scrollToTime = useRef(() => {
+  // Default scroll position: 8 AM. Lazy useState = computed once at mount,
+  // which is also what keeps the react-hooks purity lint happy.
+  const [scrollToTime] = useState(() => {
     const d = new Date();
     d.setHours(8, 0, 0, 0);
     return d;
-  }).current();
+  });
   const [anchor, setAnchor] = useState(new Date());
   const [hiddenCalendars, setHiddenCalendars] = useState<Set<string>>(new Set());
 

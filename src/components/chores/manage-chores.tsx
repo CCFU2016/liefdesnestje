@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -23,7 +23,6 @@ type Chore = {
 
 type Payload = { date: string; scheduledToday: { chore: Chore }[]; carryover: { chore: Chore }[] };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const STORAGE_KEY = "liefdesnestje:manage-chores-open";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
