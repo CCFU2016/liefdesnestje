@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { ListChecks, Undo2 } from "lucide-react";
+import { ListChecks, Undo2, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Member = { userId: string; displayName: string; color: string; avatarUrl?: string | null };
@@ -23,6 +23,7 @@ type Completion = {
   completedById: string;
   completedAt: string;
   pointsAwarded: number;
+  skipped: boolean;
 };
 
 type ScheduledRow = { chore: Chore; completion: Completion | null };
@@ -115,6 +116,7 @@ export function ChoresSection({ members }: { members: Member[] }) {
                     completedById: "OPTIMISTIC",
                     completedAt: new Date().toISOString(),
                     pointsAwarded: row.chore.pointsValue,
+                    skipped: false,
                   },
                 }
               : row
@@ -138,6 +140,48 @@ export function ChoresSection({ members }: { members: Member[] }) {
     }
     mutate();
     // Tell leaderboard to refetch too.
+    leaderboardBump();
+  };
+
+  const dismiss = async (choreId: string, date: string) => {
+    if (!confirm("Dismiss this one? Nobody gets points and it stops nagging. You can undo it later."))
+      return;
+    mutate(
+      (prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          scheduledToday: prev.scheduledToday.map((row) =>
+            row.chore.id === choreId && date === prev.date && !row.completion
+              ? {
+                  ...row,
+                  completion: {
+                    completedById: "OPTIMISTIC",
+                    completedAt: new Date().toISOString(),
+                    pointsAwarded: 0,
+                    skipped: true,
+                  },
+                }
+              : row
+          ),
+          carryover: prev.carryover.filter(
+            (c) => !(c.chore.id === choreId && c.missedDate === date)
+          ),
+        };
+      },
+      false
+    );
+    try {
+      const res = await fetch(`/api/chores/${choreId}/complete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date, skip: true }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      toast.error("Couldn't dismiss — try again.");
+    }
+    mutate();
     leaderboardBump();
   };
 
@@ -190,6 +234,7 @@ export function ChoresSection({ members }: { members: Member[] }) {
             {scheduled.map((row) => {
               const date = data!.date;
               const completed = !!row.completion;
+              const skipped = !!row.completion?.skipped;
               const completer =
                 row.completion && memberByUserId.get(row.completion.completedById);
               return (
@@ -199,6 +244,7 @@ export function ChoresSection({ members }: { members: Member[] }) {
                     "flex items-start gap-3 rounded-md p-2 -m-2 " +
                     (completed ? "opacity-60" : "")
                   }
+                  data-skipped={skipped || undefined}
                 >
                   <button
                     type="button"
@@ -208,33 +254,50 @@ export function ChoresSection({ members }: { members: Member[] }) {
                     aria-label={completed ? "Undo" : "Mark done"}
                     className={
                       "mt-0.5 h-5 w-5 rounded-full border-2 shrink-0 transition-colors " +
-                      (completed
-                        ? "border-emerald-500 bg-emerald-500"
-                        : "border-zinc-300 hover:border-zinc-500 dark:border-zinc-700")
+                      (skipped
+                        ? "border-zinc-300 bg-zinc-200 dark:border-zinc-700 dark:bg-zinc-800"
+                        : completed
+                          ? "border-emerald-500 bg-emerald-500"
+                          : "border-zinc-300 hover:border-zinc-500 dark:border-zinc-700")
                     }
                     style={completed ? undefined : { borderColor: undefined }}
                   >
-                    {completed && (
+                    {completed && !skipped && (
                       <span className="block h-2 w-2 mx-auto rounded-full bg-white" />
                     )}
                   </button>
                   <div className="flex-1 min-w-0">
-                    <div className={"text-sm font-medium " + (completed ? "line-through" : "")}>
+                    <div
+                      className={
+                        "text-sm font-medium " +
+                        (skipped ? "text-zinc-400" : completed ? "line-through" : "")
+                      }
+                    >
                       {row.chore.title}
                     </div>
                     {completed && completer && row.completion && (
                       <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1">
-                        Done by <MemberChip member={completer} /> at {formatHHmm(row.completion.completedAt)}
+                        {skipped ? "Skipped by" : "Done by"} <MemberChip member={completer} />
+                        {!skipped && <> at {formatHHmm(row.completion.completedAt)}</>}
                       </div>
                     )}
                   </div>
                   {!completed && (
-                    <span
-                      className="text-[10px] rounded-full px-1.5 py-0.5 shrink-0"
-                      style={{ background: `${SAGE}22`, color: SAGE }}
-                    >
-                      +{row.chore.pointsValue} pt
-                    </span>
+                    <>
+                      <span
+                        className="text-[10px] rounded-full px-1.5 py-0.5 shrink-0"
+                        style={{ background: `${SAGE}22`, color: SAGE }}
+                      >
+                        +{row.chore.pointsValue} pt
+                      </span>
+                      <button
+                        onClick={() => dismiss(row.chore.id, date)}
+                        className="p-1 text-zinc-300 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-300 shrink-0"
+                        title="Dismiss — nobody's doing this one"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
                   {completed && (
                     <button
@@ -275,6 +338,13 @@ export function ChoresSection({ members }: { members: Member[] }) {
                 >
                   +{row.chore.pointsValue} pt
                 </span>
+                <button
+                  onClick={() => dismiss(row.chore.id, row.missedDate)}
+                  className="p-1 text-zinc-300 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-300 shrink-0"
+                  title="Dismiss — nobody did this one"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </li>
             ))}
           </ul>

@@ -190,6 +190,9 @@ export const events = pgTable(
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     externalId: text("external_id"), // id in source calendar (Graph/Google)
     etag: text("etag"),
+    // Who sent the invite (synced events only; null for app-native ones).
+    organizerName: text("organizer_name"),
+    organizerEmail: text("organizer_email"),
     recurrenceRule: text("recurrence_rule"), // RRULE for app-native recurring events
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -500,6 +503,10 @@ export const recurringChoreCompletions = pgTable(
     completedOn: text("completed_on").notNull(), // YYYY-MM-DD in Europe/Amsterdam
     completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
     pointsAwarded: integer("points_awarded").notNull(),
+    // Dismissed instead of done — "nobody did this one, stop nagging".
+    // Awards 0 points, doesn't count on the leaderboard, undoable like a
+    // completion (same unique (chore_id, completed_on) row).
+    skipped: boolean("skipped").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -616,6 +623,74 @@ export const dinnerAbsences = pgTable(
     primaryKey({ columns: [t.householdId, t.userId, t.date] }),
     index("dinner_absences_household_date_idx").on(t.householdId, t.date),
   ]
+);
+
+// --- Bucket list ---
+// Shared household wishlist ("someday" dreams): user-managed categories
+// (travel, movies to watch, …), items with free text + links, and a star
+// rating per member so both can score how much they want each one.
+
+export const bucketListCategories = pgTable(
+  "bucket_list_categories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("bucket_list_categories_household_idx").on(t.householdId),
+    uniqueIndex("bucket_list_categories_household_name_uniq").on(t.householdId, t.name),
+  ]
+);
+
+export const bucketListItems = pgTable(
+  "bucket_list_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    // set null on category delete — items survive as "uncategorized" so
+    // removing a category can never silently erase someone's dream.
+    categoryId: uuid("category_id").references(() => bucketListCategories.id, {
+      onDelete: "set null",
+    }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    links: jsonb("links").notNull().default([]), // {url, label?}[]
+    completedAt: timestamp("completed_at", { withTimezone: true }), // ticked off the list
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("bucket_list_items_household_idx").on(t.householdId),
+    index("bucket_list_items_category_idx").on(t.categoryId),
+  ]
+);
+
+// One star rating per (item, member); upserted in place. 1–5.
+export const bucketListStars = pgTable(
+  "bucket_list_stars",
+  {
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => bucketListItems.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stars: integer("stars").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.itemId, t.userId] })]
 );
 
 export const claudeUsage = pgTable(

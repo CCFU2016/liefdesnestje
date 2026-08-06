@@ -127,6 +127,27 @@
       "when": 1778460000000,
       "tag": "0017_photo_dimensions",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786038513972,
+      "tag": "0018_chore_skip",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786038733767,
+      "tag": "0019_bucket_list",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1786039091982,
+      "tag": "0020_event_organizer",
+      "breakpoints": true
     }
   ]
 }

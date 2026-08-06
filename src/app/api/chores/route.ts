@@ -69,6 +69,7 @@ export async function GET(req: Request) {
             completedOn: recurringChoreCompletions.completedOn,
             completedAt: recurringChoreCompletions.completedAt,
             pointsAwarded: recurringChoreCompletions.pointsAwarded,
+            skipped: recurringChoreCompletions.skipped,
           })
           .from(recurringChoreCompletions)
           .where(
@@ -95,6 +96,7 @@ export async function GET(req: Request) {
             completedById: string;
             completedAt: Date;
             pointsAwarded: number;
+            skipped: boolean;
           }
         | null;
     };
@@ -112,6 +114,7 @@ export async function GET(req: Request) {
               completedById: todays.completedById,
               completedAt: todays.completedAt,
               pointsAwarded: todays.pointsAwarded,
+              skipped: todays.skipped,
             }
           : null,
       });

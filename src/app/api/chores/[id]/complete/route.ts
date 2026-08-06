@@ -7,6 +7,10 @@ import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/au
 
 const completeSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // skip=true dismisses the occurrence ("nobody did this one"): 0 points,
+  // excluded from the leaderboard, same unique row so it's undoable and
+  // races with a real completion resolve to whichever landed first.
+  skip: z.boolean().optional(),
 });
 
 async function loadChore(
@@ -43,7 +47,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         completedById: ctx.userId,
         completedOn: body.data.date,
         completedAt: new Date(),
-        pointsAwarded: chore.pointsValue,
+        pointsAwarded: body.data.skip ? 0 : chore.pointsValue,
+        skipped: !!body.data.skip,
       })
       .onConflictDoNothing()
       .returning();

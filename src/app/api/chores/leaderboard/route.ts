@@ -19,7 +19,12 @@ export async function GET(req: Request) {
     // live chore in this household. Joining gives us the household scope
     // (a chore_id alone doesn't carry that info — the join filters out
     // completions for chores in other households / soft-deleted chores).
-    const conditions = [eq(recurringChores.householdId, ctx.householdId)];
+    const conditions = [
+      eq(recurringChores.householdId, ctx.householdId),
+      // Dismissed occurrences ("nobody did it") are not achievements —
+      // keep them off the board entirely, count included.
+      eq(recurringChoreCompletions.skipped, false),
+    ];
     if (range === "week") {
       const today = todayInAmsterdam();
       const start = weekStart(today);
