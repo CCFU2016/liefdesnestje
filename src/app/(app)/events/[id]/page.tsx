@@ -1,15 +1,20 @@
 import { requireHouseholdMember, isVisibleTo } from "@/lib/auth/household";
 import { db } from "@/lib/db";
-import { eventCategories, holidays, householdMembers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  eventCategories,
+  externalCalendarAccounts,
+  holidays,
+  householdMembers,
+} from "@/lib/db/schema";
+import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { differenceInCalendarDays, format } from "date-fns";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { CalendarCheck } from "lucide-react";
 import { TravelSection } from "./travel-section";
 import { DocumentsSection } from "./documents-section";
+import { EditEventButton } from "./edit-button";
 
 export default async function EventDetailPage({
   params,
@@ -31,9 +36,22 @@ export default async function EventDetailPage({
     .from(householdMembers)
     .where(eq(householdMembers.householdId, ctx.householdId));
 
-  const category = h.categoryId
-    ? (await db.select().from(eventCategories).where(eq(eventCategories.id, h.categoryId)).limit(1))[0]
-    : null;
+  // Categories + connected calendar providers feed the edit dialog.
+  const [categories, myAccounts] = await Promise.all([
+    db
+      .select()
+      .from(eventCategories)
+      .where(eq(eventCategories.householdId, ctx.householdId))
+      .orderBy(asc(eventCategories.sortOrder), asc(eventCategories.name)),
+    db
+      .select({ provider: externalCalendarAccounts.provider })
+      .from(externalCalendarAccounts)
+      .where(eq(externalCalendarAccounts.userId, ctx.userId)),
+  ]);
+  const connectedProviders = Array.from(new Set(myAccounts.map((a) => a.provider))) as Array<
+    "google" | "microsoft"
+  >;
+  const category = h.categoryId ? categories.find((c) => c.id === h.categoryId) ?? null : null;
 
   const memberByUserId = new Map(members.map((m) => [m.userId, m]));
   const start = parseYmd(h.startsOn);
@@ -55,9 +73,19 @@ export default async function EventDetailPage({
             {h.endsOn && ` – ${format(parseYmd(h.endsOn), "d MMM yyyy")}`}
           </div>
         </div>
-        <div className="text-right shrink-0">
-          <div className="text-3xl font-bold">{Math.abs(daysAway)}</div>
-          <div className="text-xs text-zinc-500">{daysAway < 0 ? "days ago" : "days away"}</div>
+        <div className="flex items-start gap-3 shrink-0">
+          {h.authorId === ctx.userId && (
+            <EditEventButton
+              event={h}
+              members={members}
+              categories={categories}
+              connectedProviders={connectedProviders}
+            />
+          )}
+          <div className="text-right">
+            <div className="text-3xl font-bold">{Math.abs(daysAway)}</div>
+            <div className="text-xs text-zinc-500">{daysAway < 0 ? "days ago" : "days away"}</div>
+          </div>
         </div>
       </div>
 
@@ -126,13 +154,6 @@ export default async function EventDetailPage({
         canEdit={h.authorId === ctx.userId}
       />
 
-      {h.authorId === ctx.userId && (
-        <div className="mt-4">
-          <Link href="/events">
-            <Button variant="ghost" size="sm">Edit from the list</Button>
-          </Link>
-        </div>
-      )}
     </div>
   );
 }
