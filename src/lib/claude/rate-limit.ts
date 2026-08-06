@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { claudeUsage } from "@/lib/db/schema";
 import { and, count, eq } from "drizzle-orm";
+import { todayInAmsterdam } from "@/lib/chores/schedule";
 
 const DAILY_CAP = 20;
 
@@ -11,9 +12,11 @@ export class ExtractionBudgetError extends Error {
   }
 }
 
+// The user's day, in the household's timezone — same convention as chore
+// completions. Server-local time would reset the cap at Railway's UTC
+// midnight (2am Amsterdam) instead of the actual day boundary.
 function today(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return todayInAmsterdam();
 }
 
 export async function assertWithinDailyCap(userId: string): Promise<void> {

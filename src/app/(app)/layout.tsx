@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { db } from "@/lib/db";
 import { householdMembers, notifications } from "@/lib/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { Sidebar } from "@/components/shell/sidebar";
 import { MobileTabs } from "@/components/shell/mobile-tabs";
 import { Header } from "@/components/shell/header";
@@ -20,8 +20,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   )[0];
   if (!member) redirect("/onboarding");
 
-  const unread = await db
-    .select({ id: notifications.id })
+  const [{ unreadCount }] = await db
+    .select({ unreadCount: count() })
     .from(notifications)
     .where(and(eq(notifications.userId, session.user.id), isNull(notifications.readAt)));
 
@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }}
       />
       <div className="flex flex-1 min-w-0 flex-col pb-16 md:pb-0">
-        <Header unreadCount={unread.length} />
+        <Header unreadCount={unreadCount} />
         {/* min-w-0 lets flex children shrink below their natural width;
             individual pages / cards handle their own overflow so content
             stays visible rather than being clipped off the viewport. */}

@@ -36,10 +36,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ path: s
         e instanceof Error ? e.message : String(e)
       })`
     );
-    return NextResponse.json(
-      { error: "Not found", path: full, uploadRoot: UPLOAD_ROOT },
-      { status: 404 }
-    );
+    // Server paths stay in the log line above — don't leak them to the client.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const bytes = await readFile(full);
   const mime = guessMime(rel);
