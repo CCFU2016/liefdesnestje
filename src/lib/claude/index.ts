@@ -25,8 +25,15 @@ import {
 } from "./prompts";
 import { assertWithinDailyCap, recordUsage } from "./rate-limit";
 
-// Model: sticking with what the v2 brief specified explicitly.
-const MODEL = "claude-sonnet-4-6";
+// Sonnet 5 — successor to the Sonnet 4.6 the v2 brief specified. Two
+// migration notes: (1) Sonnet 5 runs adaptive thinking by default when the
+// `thinking` param is omitted, and max_tokens caps thinking + answer
+// together — our extraction calls are simple structured pulls, so we pin
+// thinking off (THINKING below) to keep the old latency/cost profile.
+// (2) Sonnet 5's tokenizer spends ~30% more tokens on the same text, so the
+// per-call max_tokens budgets carry extra headroom vs the 4.6 values.
+const MODEL = "claude-sonnet-5";
+const THINKING = { type: "disabled" as const };
 
 let clientSingleton: Anthropic | null = null;
 function client(): Anthropic {
@@ -62,7 +69,8 @@ export async function extractRecipeFromText(
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 2000,
+      thinking: THINKING,
+      max_tokens: 3000,
       system: RECIPE_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(ExtractedRecipeSchema) },
       messages: [{ role: "user", content: text }],
@@ -104,7 +112,8 @@ export async function extractRecipeFromImage(input: {
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 4000, // cookbook pages can be long
+      thinking: THINKING,
+      max_tokens: 6000, // cookbook pages can be long
       system: RECIPE_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(ExtractedRecipeSchema) },
       messages: [
@@ -170,7 +179,8 @@ export async function extractRecipeFromCaption(
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 2000,
+      thinking: THINKING,
+      max_tokens: 3000,
       system: SOCIAL_CAPTION_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(SocialExtractionSchema) },
       messages: [{ role: "user", content: prefix + caption }],
@@ -224,7 +234,8 @@ export async function aggregateIngredients(
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 3000,
+      thinking: THINKING,
+      max_tokens: 4500,
       system: INGREDIENT_AGGREGATION_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(AggregatedListSchema) },
       messages: [
@@ -282,7 +293,8 @@ export async function estimateNutrition(input: {
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 500,
+      thinking: THINKING,
+      max_tokens: 800,
       system: NUTRITION_ESTIMATION_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(EstimatedNutritionSchema) },
       messages: [
@@ -328,7 +340,8 @@ export async function extractRestaurantFromText(input: {
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 500,
+      thinking: THINKING,
+      max_tokens: 800,
       system: RESTAURANT_EXTRACTION_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(ExtractedRestaurantSchema) },
       messages: [
@@ -419,7 +432,8 @@ export async function extractReservation(input: {
   try {
     const resp = await client().messages.parse({
       model: MODEL,
-      max_tokens: 800,
+      thinking: THINKING,
+      max_tokens: 1200,
       system: RESERVATION_EXTRACTION_SYSTEM_PROMPT,
       output_config: { format: zodOutputFormat(ExtractedReservationSchema) },
       messages: [{ role: "user", content }],
