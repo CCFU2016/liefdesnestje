@@ -14,6 +14,7 @@ import {
   Bell,
   LogOut,
   UtensilsCrossed,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/(app)/actions";
@@ -27,6 +28,7 @@ const primary: NavItem[] = [
   { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/notes", label: "Notes", icon: NotebookText },
+  { href: "/bucket-list", label: "Bucket list", icon: Sparkles },
 ];
 
 const secondary: NavItem[] = [
