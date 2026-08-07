@@ -19,6 +19,10 @@ const createSchema = z.object({
   // metadata below applies to every stop.
   stops: z.array(stopSchema).min(1).max(30),
   tripName: z.string().trim().max(200).nullable().optional(),
+  // Group the new stops with an existing loose pin: that pin becomes the
+  // first stop of a (possibly new) trip, and the new stops inherit ITS
+  // date/who/notes — the payload's shared metadata is ignored then.
+  joinPlaceId: z.string().uuid().nullable().optional(),
   visitedOn: z.string().regex(/^\d{4}(-\d{2}(-\d{2})?)?$/).nullable().optional(),
   withPersons: z.array(z.string().uuid()).min(1),
   notes: z.string().trim().max(2000).nullable().optional(),
@@ -61,11 +65,49 @@ export async function POST(req: Request) {
     const ctx = await requireHouseholdMember();
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-    const { stops, tripName, visitedOn, withPersons, notes } = body.data;
+    const { stops, tripName, joinPlaceId } = body.data;
+    let { visitedOn, withPersons, notes } = body.data;
 
-    // A trip row exists when there are several stops or an explicit name.
     let tripId: string | null = null;
-    if (stops.length > 1 || tripName) {
+    if (joinPlaceId) {
+      const anchor = (
+        await db
+          .select()
+          .from(visitedPlaces)
+          .where(
+            and(
+              eq(visitedPlaces.id, joinPlaceId),
+              eq(visitedPlaces.householdId, ctx.householdId),
+              isNull(visitedPlaces.deletedAt)
+            )
+          )
+          .limit(1)
+      )[0];
+      if (!anchor) return NextResponse.json({ error: "Place not found" }, { status: 404 });
+
+      if (anchor.tripId) {
+        tripId = anchor.tripId; // already a trip — just append
+      } else {
+        const [trip] = await db
+          .insert(trips)
+          .values({
+            householdId: ctx.householdId,
+            authorId: ctx.userId,
+            name: tripName || [anchor.name, ...stops.map((s) => s.name)].join(" – "),
+          })
+          .returning();
+        tripId = trip.id;
+        await db
+          .update(visitedPlaces)
+          .set({ tripId, updatedAt: new Date() })
+          .where(eq(visitedPlaces.id, anchor.id));
+      }
+      // New stops share the anchor's story, not the payload's.
+      visitedOn = anchor.visitedOn;
+      withPersons = anchor.withPersons;
+      notes = anchor.notes;
+    } else if (stops.length > 1 || tripName) {
+      // A trip row exists when there are several stops or an explicit name.
       const [trip] = await db
         .insert(trips)
         .values({

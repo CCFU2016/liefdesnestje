@@ -129,11 +129,13 @@ function spreadOverlapping(places: Place[]): { place: Place; lat: number; lng: n
 export default function PlacesMap({
   places,
   members,
+  showPins,
   onEdit,
   onEditTrip,
 }: {
   places: Place[];
   members: Member[];
+  showPins: boolean;
   onEdit: (place: Place) => void;
   onEditTrip: (tripId: string, tripName: string) => void;
 }) {
@@ -248,7 +250,7 @@ export default function PlacesMap({
         style={stateStyle}
         interactive={false}
       />
-      {spreadOverlapping(places).map(({ place: p, lat, lng }) => (
+      {showPins && spreadOverlapping(places).map(({ place: p, lat, lng }) => (
         <Marker
           key={p.id}
           position={[lat, lng]}

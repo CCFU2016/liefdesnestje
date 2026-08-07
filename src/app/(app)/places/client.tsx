@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { Loader2, MapPin, Plus, X } from "lucide-react";
+import { Eye, EyeOff, Loader2, MapPin, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,8 +52,19 @@ export function PlacesClient({
     return [...seen.entries()].map(([id, name]) => ({ id, name }));
   }, [places]);
 
+  // Loose pins (no trip yet) — the add dialog can group new cities with one,
+  // turning it into a trip.
+  const loosePins = useMemo(
+    () =>
+      places
+        .filter((p) => !p.tripId)
+        .map((p) => ({ id: p.id, name: p.name + (p.country ? ` (${p.country})` : "") })),
+    [places]
+  );
+
   const [dialog, setDialog] = useState<{ existing?: Place } | null>(null);
   const [tripDialog, setTripDialog] = useState<{ tripId: string; tripName: string } | null>(null);
+  const [showPins, setShowPins] = useState(true);
   const [personFilter, setPersonFilter] = useState<string | "together" | null>(null);
 
   const filtered = useMemo(() => {
@@ -162,6 +173,14 @@ export function PlacesClient({
             onClick={() => setPersonFilter(personFilter === "together" ? null : "together")}
           />
         )}
+        <button
+          onClick={() => setShowPins(!showPins)}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-zinc-400 dark:border-zinc-800 dark:text-zinc-400"
+          title={showPins ? "Hide pins — countries only" : "Show pins"}
+        >
+          {showPins ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          Pins
+        </button>
       </div>
 
       {/* isolate + z-0 traps Leaflet's internal z-indexes (panes go up to
@@ -170,6 +189,7 @@ export function PlacesClient({
         <PlacesMap
           places={filtered}
           members={members}
+          showPins={showPins}
           onEdit={(place) => setDialog({ existing: place })}
           onEditTrip={(tripId, tripName) => setTripDialog({ tripId, tripName })}
         />
@@ -366,6 +386,7 @@ export function PlacesClient({
           members={members}
           currentUserId={currentUserId}
           trips={tripsList}
+          loosePins={loosePins}
           onClose={() => setDialog(null)}
           onSaved={() => {
             setDialog(null);
@@ -452,6 +473,7 @@ function PlaceDialog({
   members,
   currentUserId,
   trips,
+  loosePins,
   onClose,
   onSaved,
 }: {
@@ -459,6 +481,7 @@ function PlaceDialog({
   members: Member[];
   currentUserId: string;
   trips: { id: string; name: string }[];
+  loosePins: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -467,9 +490,10 @@ function PlaceDialog({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stops, setStops] = useState<SearchResult[]>([]);
   const [tripName, setTripName] = useState("");
-  // "" = these stops stand on their own (or form a new trip); an id = append
-  // them to that existing trip — anyone's, Laura's included.
-  const [addToTripId, setAddToTripId] = useState("");
+  // "" = these stops stand on their own (or form a new trip);
+  // "trip:<id>" = append to that trip; "pin:<id>" = group with that loose
+  // pin (which becomes a trip). Anyone's, Laura's included.
+  const [addTarget, setAddTarget] = useState("");
   const [name, setName] = useState(existing?.name ?? "");
   // Flexible visit date: exact (YYYY-MM-DD), month (YYYY-MM), year (YYYY),
   // or none. Precision is derived from the stored string length when editing.
@@ -536,26 +560,42 @@ function PlaceDialog({
   const save = async () => {
     if (!existing && stops.length === 0) return toast.error("Add at least one city first.");
     if (existing && !name.trim()) return toast.error("Give the place a name.");
-    if (!existing && addToTripId) {
+    if (!existing && addTarget) {
+      const [kind, targetId] = addTarget.split(":");
+      const stopPayload = stops.map((s) => ({
+        name: s.name,
+        country: s.country,
+        countryCode: s.countryCode,
+        state: s.state,
+        latitude: s.latitude,
+        longitude: s.longitude,
+      }));
       setBusy(true);
       try {
-        const res = await fetch(`/api/trips/${addToTripId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            addStops: stops.map((s) => ({
-              name: s.name,
-              country: s.country,
-              countryCode: s.countryCode,
-              state: s.state,
-              latitude: s.latitude,
-              longitude: s.longitude,
-            })),
-          }),
-        });
+        const res =
+          kind === "trip"
+            ? await fetch(`/api/trips/${targetId}`, {
+                method: "PATCH",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ addStops: stopPayload }),
+              })
+            : await fetch("/api/places", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                  stops: stopPayload,
+                  joinPlaceId: targetId,
+                  tripName: tripName.trim() || null,
+                  // Required by the schema; the server inherits the anchor
+                  // pin's people instead when joinPlaceId is set.
+                  withPersons: Array.from(withPersons),
+                }),
+              });
         if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
         toast.success(
-          `Added to ${trips.find((t) => t.id === addToTripId)?.name ?? "trip"} 📍`
+          kind === "trip"
+            ? `Added to ${trips.find((t) => t.id === targetId)?.name ?? "trip"} 📍`
+            : "Grouped into a trip 📍"
         );
         onSaved();
       } catch (e) {
@@ -687,31 +727,44 @@ function PlaceDialog({
                     ))}
                   </ul>
                 )}
-                {stops.length > 0 && trips.length > 0 && (
+                {stops.length > 0 && (trips.length > 0 || loosePins.length > 0) && (
                   <div className="pt-1 space-y-1">
                     <Label htmlFor="pl-trip">Add to</Label>
                     <select
                       id="pl-trip"
                       className="w-full h-9 rounded-md border border-zinc-200 bg-transparent px-3 text-sm dark:border-zinc-800"
-                      value={addToTripId}
-                      onChange={(e) => setAddToTripId(e.target.value)}
+                      value={addTarget}
+                      onChange={(e) => setAddTarget(e.target.value)}
                     >
                       <option value="">{stops.length > 1 ? "A new trip" : "Just this pin"}</option>
                       {trips.map((t) => (
-                        <option key={t.id} value={t.id}>
+                        <option key={t.id} value={`trip:${t.id}`}>
                           Existing trip: {t.name}
                         </option>
                       ))}
+                      {loosePins.map((p) => (
+                        <option key={p.id} value={`pin:${p.id}`}>
+                          Group with: {p.name}
+                        </option>
+                      ))}
                     </select>
-                    {addToTripId && (
+                    {addTarget && (
                       <p className="text-[11px] text-zinc-500">
-                        The new cit{stops.length === 1 ? "y" : "ies"} inherit the trip&apos;s
-                        date, people, and notes.
+                        The new cit{stops.length === 1 ? "y" : "ies"} inherit the
+                        {addTarget.startsWith("trip:") ? " trip's" : " pin's"} date, people, and
+                        notes.
                       </p>
+                    )}
+                    {addTarget.startsWith("pin:") && (
+                      <Input
+                        value={tripName}
+                        onChange={(e) => setTripName(e.target.value)}
+                        placeholder="Name for the new trip (optional)"
+                      />
                     )}
                   </div>
                 )}
-                {stops.length > 1 && !addToTripId && (
+                {stops.length > 1 && !addTarget && (
                   <div className="pt-1">
                     <Input
                       value={tripName}
@@ -738,7 +791,7 @@ function PlaceDialog({
               </div>
             )}
 
-            {!(!existing && addToTripId) && (
+            {!(!existing && addTarget) && (
             <div className="space-y-1.5">
               <Label htmlFor="pl-date">Visited</Label>
               <div className="flex gap-2">
@@ -791,7 +844,7 @@ function PlaceDialog({
             </div>
 
             )}
-            {!(!existing && addToTripId) && (
+            {!(!existing && addTarget) && (
             <div className="space-y-1.5">
               <Label>Who was there?</Label>
               <div className="flex gap-2">
@@ -822,7 +875,7 @@ function PlaceDialog({
             </div>
 
             )}
-            {!(!existing && addToTripId) && (
+            {!(!existing && addTarget) && (
             <div className="space-y-1.5">
               <Label htmlFor="pl-notes">Notes</Label>
               <textarea
