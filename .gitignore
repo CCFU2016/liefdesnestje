@@ -40,7 +40,7 @@ yarn-error.log*
 /uploads
 
 # pglite local-dev database
-/.local-db
+/.local-db*
 /.local-uploads
 
 # local screenshots / reference shots
