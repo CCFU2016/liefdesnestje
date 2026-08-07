@@ -11,12 +11,20 @@ import {
   resolveBaseUrl,
 } from "@/lib/icloud-shared-album";
 import { extractGps, reverseGeocode } from "@/lib/photo-location";
+import { todayInAmsterdam } from "@/lib/chores/schedule";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+import { UPLOAD_ROOT } from "@/lib/uploads";
 
 // Reused from the upload lib's image MIMEs. We accept HEIC-rendered JPEGs.
 const ALLOWED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
 
-function toYmd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+async function fileExists(relPath: string): Promise<boolean> {
+  try {
+    return (await stat(join(UPLOAD_ROOT, relPath))).isFile();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -27,17 +35,26 @@ function toYmd(d: Date): string {
  * The last 30 days' chosen guids are excluded so we don't repeat a recent pick.
  */
 export async function getOrPickDailyPhoto(
-  householdId: string,
-  date = new Date()
+  householdId: string
 ): Promise<(typeof photoOfTheDay.$inferSelect) | null> {
-  const ymd = toYmd(date);
+  // Household-local day, not the server's UTC clock — the photo flips at
+  // midnight in Amsterdam, not at 1-2am.
+  const ymd = todayInAmsterdam();
 
   const [cached] = await db
     .select()
     .from(photoOfTheDay)
     .where(and(eq(photoOfTheDay.householdId, householdId), eq(photoOfTheDay.date, ymd)))
     .limit(1);
-  if (cached) return cached;
+  if (cached) {
+    if (await fileExists(cached.localPath)) return cached;
+    // The row exists but its file vanished (Volume hiccup / redeploy) —
+    // drop the dead row and pick fresh instead of 404ing forever.
+    console.warn("[daily-photo] cached file missing, re-picking", cached.localPath);
+    await db
+      .delete(photoOfTheDay)
+      .where(and(eq(photoOfTheDay.householdId, householdId), eq(photoOfTheDay.date, ymd)));
+  }
 
   const [album] = await db
     .select()
@@ -50,13 +67,18 @@ export async function getOrPickDailyPhoto(
   // successful pick visible so the card never vanishes silently on a
   // transient iCloud hiccup.
   const fallback = async () => {
-    const [prev] = await db
+    // Most recent prior pick WITH its file still on disk — dead rows are
+    // skipped so the card never points at a 404.
+    const prev = await db
       .select()
       .from(photoOfTheDay)
       .where(eq(photoOfTheDay.householdId, householdId))
       .orderBy(desc(photoOfTheDay.date))
-      .limit(1);
-    return prev ?? null;
+      .limit(10);
+    for (const row of prev) {
+      if (await fileExists(row.localPath)) return row;
+    }
+    return null;
   };
 
   // Fetch the album's photo list, resolving the partition if we don't have

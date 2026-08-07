@@ -22,9 +22,11 @@ type PhotoPayload = {
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function DailyPhotoCard() {
+  // The installed PWA keeps this page mounted for days — without periodic
+  // and on-focus revalidation the photo never rolled over to the new day.
   const { data } = useSWR<PhotoPayload>("/api/today/photo", fetcher, {
-    revalidateOnFocus: false,
-    revalidateIfStale: false,
+    revalidateOnFocus: true,
+    refreshInterval: 30 * 60_000, // catches the midnight flip within half an hour
   });
 
   // Render nothing until we have a confirmed photo — no skeleton, no
