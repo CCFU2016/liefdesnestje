@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   const who = body.as ?? "niki";
 
   const email = who === "partner" ? "partner@dev.local" : "niki@dev.local";
-  const name = who === "partner" ? "Partner" : "Niki";
+  const name = who === "partner" ? "Laura" : "Niki";
   const color = who === "partner" ? "#e11d48" : "#4f46e5";
 
   // Ensure user exists

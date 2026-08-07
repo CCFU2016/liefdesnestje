@@ -42,7 +42,7 @@ export function DevSignInButtons() {
         onClick={() => signIn("partner")}
         disabled={!!pending}
       >
-        {pending === "partner" ? "…" : "Sign in as Partner"}
+        {pending === "partner" ? "…" : "Sign in as Laura"}
       </Button>
     </div>
   );
