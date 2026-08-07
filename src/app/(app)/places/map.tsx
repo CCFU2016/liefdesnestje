@@ -130,10 +130,12 @@ export default function PlacesMap({
   places,
   members,
   onEdit,
+  onEditTrip,
 }: {
   places: Place[];
   members: Member[];
   onEdit: (place: Place) => void;
+  onEditTrip: (tripId: string, tripName: string) => void;
 }) {
   // Per-country fill color: who has been there across all of its places —
   // orange when everyone, else that member's map color.
@@ -267,8 +269,17 @@ export default function PlacesMap({
                   .filter(Boolean)
                   .join(" · ")}
               </div>
-              {p.tripName && (
-                <div className="text-xs mt-1 opacity-70">Part of: {p.tripName}</div>
+              {p.tripId && p.tripName && (
+                <div className="text-xs mt-1 opacity-70">
+                  Part of:{" "}
+                  <button
+                    type="button"
+                    onClick={() => onEditTrip(p.tripId!, p.tripName!)}
+                    className="underline"
+                  >
+                    {p.tripName}
+                  </button>
+                </div>
               )}
               {p.notes && <div className="text-xs mt-1 whitespace-pre-wrap">{p.notes}</div>}
               <button

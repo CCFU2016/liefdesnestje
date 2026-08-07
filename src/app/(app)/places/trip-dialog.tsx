@@ -101,11 +101,9 @@ export function TripDialog({
     const expectedLen = { date: 10, month: 7, year: 4 }[
       datePrecision as "date" | "month" | "year"
     ];
+    // An empty date field simply means "no date" — never block the save.
     const visitedValue =
       datePrecision === "none" ? null : visitedOn.slice(0, expectedLen) || null;
-    if (datePrecision !== "none" && !visitedValue) {
-      return toast.error("Fill in the date — or set it to 'No date'.");
-    }
     setBusy(true);
     try {
       const res = await fetch(`/api/trips/${tripId}`, {

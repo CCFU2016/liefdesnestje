@@ -44,6 +44,14 @@ export function PlacesClient({
   });
   const places = useMemo(() => data?.places ?? [], [data]);
 
+  const tripsList = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const p of places) {
+      if (p.tripId && p.tripName && !seen.has(p.tripId)) seen.set(p.tripId, p.tripName);
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name }));
+  }, [places]);
+
   const [dialog, setDialog] = useState<{ existing?: Place } | null>(null);
   const [tripDialog, setTripDialog] = useState<{ tripId: string; tripName: string } | null>(null);
   const [personFilter, setPersonFilter] = useState<string | "together" | null>(null);
@@ -163,6 +171,7 @@ export function PlacesClient({
           places={filtered}
           members={members}
           onEdit={(place) => setDialog({ existing: place })}
+          onEditTrip={(tripId, tripName) => setTripDialog({ tripId, tripName })}
         />
       </div>
 
@@ -356,6 +365,7 @@ export function PlacesClient({
           existing={dialog.existing}
           members={members}
           currentUserId={currentUserId}
+          trips={tripsList}
           onClose={() => setDialog(null)}
           onSaved={() => {
             setDialog(null);
@@ -441,12 +451,14 @@ function PlaceDialog({
   existing,
   members,
   currentUserId,
+  trips,
   onClose,
   onSaved,
 }: {
   existing?: Place;
   members: Member[];
   currentUserId: string;
+  trips: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -455,6 +467,9 @@ function PlaceDialog({
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stops, setStops] = useState<SearchResult[]>([]);
   const [tripName, setTripName] = useState("");
+  // "" = these stops stand on their own (or form a new trip); an id = append
+  // them to that existing trip — anyone's, Laura's included.
+  const [addToTripId, setAddToTripId] = useState("");
   const [name, setName] = useState(existing?.name ?? "");
   // Flexible visit date: exact (YYYY-MM-DD), month (YYYY-MM), year (YYYY),
   // or none. Precision is derived from the stored string length when editing.
@@ -521,12 +536,38 @@ function PlaceDialog({
   const save = async () => {
     if (!existing && stops.length === 0) return toast.error("Add at least one city first.");
     if (existing && !name.trim()) return toast.error("Give the place a name.");
+    if (!existing && addToTripId) {
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/trips/${addToTripId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            addStops: stops.map((s) => ({
+              name: s.name,
+              country: s.country,
+              countryCode: s.countryCode,
+              state: s.state,
+              latitude: s.latitude,
+              longitude: s.longitude,
+            })),
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error ?? "Save failed");
+        toast.success(
+          `Added to ${trips.find((t) => t.id === addToTripId)?.name ?? "trip"} 📍`
+        );
+        onSaved();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Save failed");
+        setBusy(false);
+      }
+      return;
+    }
     const expectedLen = { date: 10, month: 7, year: 4 }[datePrecision as "date" | "month" | "year"];
+    // An empty date field simply means "no date" — never block the save.
     const visitedValue =
       datePrecision === "none" ? null : visitedOn.slice(0, expectedLen) || null;
-    if (datePrecision !== "none" && !visitedValue) {
-      return toast.error("Fill in the date — or set it to 'No date'.");
-    }
     setBusy(true);
     try {
       const res = existing
@@ -646,7 +687,31 @@ function PlaceDialog({
                     ))}
                   </ul>
                 )}
-                {stops.length > 1 && (
+                {stops.length > 0 && trips.length > 0 && (
+                  <div className="pt-1 space-y-1">
+                    <Label htmlFor="pl-trip">Add to</Label>
+                    <select
+                      id="pl-trip"
+                      className="w-full h-9 rounded-md border border-zinc-200 bg-transparent px-3 text-sm dark:border-zinc-800"
+                      value={addToTripId}
+                      onChange={(e) => setAddToTripId(e.target.value)}
+                    >
+                      <option value="">{stops.length > 1 ? "A new trip" : "Just this pin"}</option>
+                      {trips.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          Existing trip: {t.name}
+                        </option>
+                      ))}
+                    </select>
+                    {addToTripId && (
+                      <p className="text-[11px] text-zinc-500">
+                        The new cit{stops.length === 1 ? "y" : "ies"} inherit the trip&apos;s
+                        date, people, and notes.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {stops.length > 1 && !addToTripId && (
                   <div className="pt-1">
                     <Input
                       value={tripName}
@@ -673,6 +738,7 @@ function PlaceDialog({
               </div>
             )}
 
+            {!(!existing && addToTripId) && (
             <div className="space-y-1.5">
               <Label htmlFor="pl-date">Visited</Label>
               <div className="flex gap-2">
@@ -724,6 +790,8 @@ function PlaceDialog({
               </div>
             </div>
 
+            )}
+            {!(!existing && addToTripId) && (
             <div className="space-y-1.5">
               <Label>Who was there?</Label>
               <div className="flex gap-2">
@@ -753,6 +821,8 @@ function PlaceDialog({
               </div>
             </div>
 
+            )}
+            {!(!existing && addToTripId) && (
             <div className="space-y-1.5">
               <Label htmlFor="pl-notes">Notes</Label>
               <textarea
@@ -763,6 +833,7 @@ function PlaceDialog({
                 placeholder="That little restaurant by the harbour…"
               />
             </div>
+            )}
           </div>
 
           <div className="mt-6 flex justify-between">

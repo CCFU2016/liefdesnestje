@@ -28,7 +28,10 @@ export async function GET(req: Request) {
     if (q.length < 2) return NextResponse.json({ results: [] });
 
     const params = new URLSearchParams({ q, limit: "6", lang: "en" });
-    for (const tag of ["place:city", "place:town", "place:village", "place:municipality"]) {
+    // Cities, towns, villages — plus whole countries, for "been there,
+    // don't remember which city" pins (the pin lands on the centroid and
+    // the country fill does the talking).
+    for (const tag of ["place:city", "place:town", "place:village", "place:municipality", "place:country"]) {
       params.append("osm_tag", tag);
     }
     const res = await safeFetch(`https://photon.komoot.io/api/?${params}`, {
@@ -46,16 +49,19 @@ export async function GET(req: Request) {
       .filter((f) => f.properties.name && f.geometry?.coordinates)
       .map((f) => {
         const p = f.properties;
-        const displayName = [p.name, p.state, p.country].filter(Boolean).join(", ");
+        const isCountry = p.osm_value === "country";
+        const displayName = isCountry
+          ? `${p.name} (whole country)`
+          : [p.name, p.state, p.country].filter(Boolean).join(", ");
         return {
           id: p.osm_id,
           name: p.name!,
           displayName,
           latitude: f.geometry.coordinates[1],
           longitude: f.geometry.coordinates[0],
-          country: p.country ?? null,
+          country: isCountry ? p.name! : (p.country ?? null),
           countryCode: p.countrycode?.toLowerCase() ?? null,
-          state: p.state ?? null,
+          state: isCountry ? null : (p.state ?? null),
         };
       });
     return NextResponse.json({ results });
