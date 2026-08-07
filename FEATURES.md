@@ -4,6 +4,10 @@ The last 20 things shipped, newest first. Each entry is a user-facing change; ro
 
 ---
 
+## 0e. Travel map
+
+New **Travel map** section (last in the menu, 📍 icon): a world map (Carto light tiles via Leaflet, with a bundled country-boundary overlay) where you pin every place you've been. **Colors are fixed**: Niki light blue, Laura pink, together orange — pins, country fills, chips, and the legend all agree, and the US fills **state by state** (its own boundary layer from the US Census atlas). Adding uses **city-level autocomplete** (Photon/komoot, server-side proxy) — pick several cities in one go and they become a **trip** with a name, shared date, who-was-there, and notes. Dates are flexible: month+year is the default, exact date, year-only, or no date at all. The **Countries visited** card shows a per-person country counter, splits countries into Together / Niki / Laura sections, and each chip expands into its per-trip visit history (the US also shows its state chips); trips are editable in place — rename, add/remove stops, change shared details, or delete. Repeat visits to the same city fan out into clickable pins. New tables: `visited_places` + `trips`. (Also: Fiji/Russia antimeridian polygons unwrapped and Antarctica dropped from the boundary layer — they drew stray horizontal lines across the map.)
+
 ## 0c. Bucket list
 
 New **Bucket list** section, last in the menu. Create categories (travel, movies to watch, …), add dreams with notes and any number of links, and both of you rate each item 1–5 stars — your stars are amber and clickable, your partner's show in their member color. Items sort by combined star count (most-wanted first), can be ticked off (🎉) and put back, and deleting a category keeps its items as "uncategorized" so nothing is ever lost. Three new tables (`bucket_list_categories`, `bucket_list_items`, `bucket_list_stars`); ratings upsert per (item, member).

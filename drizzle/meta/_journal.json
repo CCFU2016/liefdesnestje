@@ -148,6 +148,34 @@
       "when": 1786039091982,
       "tag": "0020_event_organizer",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786042339501,
+      "tag": "0021_visited_places",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786044677691,
+      "tag": "0022_visited_on_optional",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1786045146313,
+      "tag": "0023_place_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786082646722,
+      "tag": "0024_trips",
+      "breakpoints": true
     }
   ]
 }

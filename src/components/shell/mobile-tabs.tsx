@@ -11,6 +11,7 @@ import {
   Settings as SettingsIcon,
   UtensilsCrossed,
   Sparkles,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const items = [
   { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/bucket-list", label: "Bucket list", icon: Sparkles },
+  { href: "/places", label: "Travel map", icon: MapPin },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 

@@ -15,6 +15,7 @@ import {
   LogOut,
   UtensilsCrossed,
   Sparkles,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOutAction } from "@/app/(app)/actions";
@@ -29,6 +30,7 @@ const primary: NavItem[] = [
   { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/bucket-list", label: "Bucket list", icon: Sparkles },
+  { href: "/places", label: "Travel map", icon: MapPin },
 ];
 
 const secondary: NavItem[] = [

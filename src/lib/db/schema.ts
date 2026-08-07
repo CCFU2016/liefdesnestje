@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   integer,
+  doublePrecision,
   primaryKey,
   jsonb,
   pgEnum,
@@ -691,6 +692,62 @@ export const bucketListStars = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.itemId, t.userId] })]
+);
+
+// --- Travel map ---
+// Places the household has visited — pins on the world map. withPersons
+// records who was there (one member = solo trip, both = together), and the
+// stored country/countryCode powers the countries-visited tracker without
+// re-geocoding on every page load.
+
+// A trip groups several visited places ("Roadtrip USA 2019" = Miami + Orlando
+// + New York). Shared metadata (date, who, notes) is denormalized onto each
+// place so filters, colors, and the tracker keep working per-pin; the trip
+// row just carries the name and the grouping.
+export const trips = pgTable(
+  "trips",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("trips_household_idx").on(t.householdId)]
+);
+
+export const visitedPlaces = pgTable(
+  "visited_places",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    name: text("name").notNull(), // "Lisbon", "Kyoto", …
+    country: text("country"),
+    countryCode: varchar("country_code", { length: 2 }), // ISO 3166-1 alpha-2, lowercase
+    state: text("state"), // e.g. "California" — lets the map fill US states individually
+    tripId: uuid("trip_id").references(() => trips.id, { onDelete: "set null" }),
+    latitude: doublePrecision("latitude").notNull(),
+    longitude: doublePrecision("longitude").notNull(),
+    visitedOn: text("visited_on"), // 'YYYY' | 'YYYY-MM' | 'YYYY-MM-DD' | null ("don't remember")
+    withPersons: uuid("with_persons").array().notNull().default(sql`'{}'::uuid[]`),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("visited_places_household_idx").on(t.householdId),
+    index("visited_places_country_idx").on(t.countryCode),
+  ]
 );
 
 export const claudeUsage = pgTable(
