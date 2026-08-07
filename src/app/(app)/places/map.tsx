@@ -11,7 +11,7 @@ import "leaflet/dist/leaflet.css";
 import { feature } from "topojson-client";
 import type { Topology, GeometryCollection } from "topojson-specification";
 import type { Feature, FeatureCollection } from "geojson";
-import countriesTopo from "world-atlas/countries-110m.json";
+import countriesTopo from "world-atlas/countries-50m.json";
 import statesTopo from "us-atlas/states-10m.json";
 import ccn3ToCca2 from "./ccn3-to-cca2.json";
 import {
@@ -55,7 +55,33 @@ function unwrapAntimeridian(fc: FeatureCollection): FeatureCollection {
   return fc;
 }
 
-const countryFeatures = unwrapAntimeridian(
+// Natural Earth merges overseas departments into the mother country's
+// polygon — so visiting Paris colored French Guiana. Trim those countries to
+// their metropolitan bounding box; the far-flung parts simply go unfilled.
+// (At 50m, Curaçao & friends are their own features with their own ISO
+// codes, so the Caribbean constituent countries color independently.)
+const METRO_BOUNDS: Record<string, { lon: [number, number]; lat: [number, number] }> = {
+  "250": { lon: [-10, 15], lat: [35, 55] }, // France: metro + Corsica
+  "528": { lon: [0, 10], lat: [40, 60] }, // Netherlands: European part
+};
+
+function trimOverseas(features: Feature[]): Feature[] {
+  for (const f of features) {
+    const bounds = METRO_BOUNDS[String(f.id ?? "").padStart(3, "0")];
+    if (!bounds || f.geometry?.type !== "MultiPolygon") continue;
+    f.geometry.coordinates = f.geometry.coordinates.filter((poly) => {
+      const ring = poly[0];
+      const lon = ring.reduce((a, pt) => a + pt[0], 0) / ring.length;
+      const lat = ring.reduce((a, pt) => a + pt[1], 0) / ring.length;
+      return (
+        lon >= bounds.lon[0] && lon <= bounds.lon[1] && lat >= bounds.lat[0] && lat <= bounds.lat[1]
+      );
+    });
+  }
+  return features;
+}
+
+const countryFeatures = trimOverseas(unwrapAntimeridian(
   feature(
     countriesTopo as unknown as Topology,
     (countriesTopo as unknown as { objects: { countries: GeometryCollection } }).objects.countries
@@ -63,7 +89,7 @@ const countryFeatures = unwrapAntimeridian(
   // Antarctica's ring encircles the pole — no unwrap can fix its seam, and
   // its stroke drew a line across the bottom of the map. Leave it off the
   // boundary layer (pins there would still render fine).
-).features.filter((f) => String(f.id).padStart(3, "0") !== "010");
+).features.filter((f) => String(f.id).padStart(3, "0") !== "010"));
 
 // US states as their own layer — the USA gets filled state-by-state, not as
 // one giant country blob.
