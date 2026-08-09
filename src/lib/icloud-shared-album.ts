@@ -88,10 +88,15 @@ export function parseAlbumToken(input: string): string | null {
 // would stall the whole route until Railway's gateway kills it — which
 // prevents any of our console.logs from flushing.
 const ICLOUD_TIMEOUT_MS = 12_000;
+// The full-album webstream listing is a different beast: Apple takes ~50s
+// for a 1000-photo album (measured Aug 2026). One pick per day can afford
+// to wait.
+const WEBSTREAM_TIMEOUT_MS = 120_000;
 
 async function postJson(
   url: string,
-  body: Record<string, unknown>
+  body: Record<string, unknown>,
+  timeoutMs: number = ICLOUD_TIMEOUT_MS
 ): Promise<{ status: number; body: unknown; headers: Headers }> {
   const res = await safeFetch(url, {
     method: "POST",
@@ -101,7 +106,7 @@ async function postJson(
       Accept: "application/json",
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(ICLOUD_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const text = await res.text();
   let parsed: unknown = null;
@@ -130,9 +135,14 @@ export async function resolveBaseUrl(token: string): Promise<string> {
     `https://p${part.toString().padStart(2, "0")}-sharedstreams.icloud.com/${token}/sharedstreams/`;
 
   const tryAt = async (base: string): Promise<{ ok: true; base: string } | { ok: false; next: string } | { ok: false; dead: true; status: number }> => {
-    const { status, body, headers } = await postJson(`${base}webstream`, {
-      streamCtag: null,
-    });
+    // The winning hop of this probe IS the full webstream listing — for a
+    // 1000-photo album Apple takes ~50s, so it needs the long timeout too
+    // (the 330 redirect hops answer in under a second regardless).
+    const { status, body, headers } = await postJson(
+      `${base}webstream`,
+      { streamCtag: null },
+      WEBSTREAM_TIMEOUT_MS
+    );
     if (status === 200) return { ok: true, base };
     if (status === 330) {
       const redirectHost =
@@ -165,7 +175,18 @@ export async function resolveBaseUrl(token: string): Promise<string> {
 
 /** Fetch the full webstream (photo list). Includes all derivatives metadata. */
 export async function fetchWebstream(baseUrl: string): Promise<WebstreamResponse> {
-  const { status, body } = await postJson(`${baseUrl}webstream`, { streamCtag: null });
+  // Retry once on timeout — big albums are slow AND occasionally flaky.
+  let res: Awaited<ReturnType<typeof postJson>>;
+  try {
+    res = await postJson(`${baseUrl}webstream`, { streamCtag: null }, WEBSTREAM_TIMEOUT_MS);
+  } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") {
+      res = await postJson(`${baseUrl}webstream`, { streamCtag: null }, WEBSTREAM_TIMEOUT_MS);
+    } else {
+      throw e;
+    }
+  }
+  const { status, body } = res;
   if (status !== 200) {
     throw new ICloudAlbumError(`webstream responded ${status}`);
   }
