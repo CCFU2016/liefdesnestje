@@ -4,7 +4,6 @@ import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -133,14 +132,12 @@ export function EventDialog({
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
-          <Dialog.Title className="text-lg font-semibold">{editing ? "Edit event" : "New event"}</Dialog.Title>
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-[0_10px_30px_rgba(9,9,11,0.08)] dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          <div className="max-h-[85vh] overflow-y-auto px-5 pt-5 pb-5">
+          <Dialog.Title className="text-base font-semibold tracking-tight">{editing ? "Edit event" : "New event"}</Dialog.Title>
           {initialEvent && (initialEvent.organizerName || initialEvent.organizerEmail) && (
-            <p className="mt-1 text-xs text-zinc-500">
-              Invited by{" "}
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                {initialEvent.organizerName ?? initialEvent.organizerEmail}
-              </span>
+            <p className="mt-1 text-[13px] text-zinc-500 dark:text-zinc-400">
+              Invited by {initialEvent.organizerName ?? initialEvent.organizerEmail}
               {initialEvent.organizerName && initialEvent.organizerEmail && (
                 <> ({initialEvent.organizerEmail})</>
               )}
@@ -189,34 +186,68 @@ export function EventDialog({
                 </select>
               </div>
             )}
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={visibility === "private"}
-                onChange={(e) => setVisibility(e.target.checked ? "private" : "shared")}
-              />
-              Private (only visible to you)
-            </label>
-          </div>
-          <div className="mt-6 flex items-center justify-between">
-            <div>
-              {editing && (
-                <Button variant="destructive" size="sm" onClick={remove} disabled={pending}>
-                  Delete
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" onClick={onClose} disabled={pending}>Cancel</Button>
-              <Button onClick={save} disabled={pending}>
-                {pending ? "Saving…" : "Save"}
-              </Button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setVisibility(visibility === "private" ? "shared" : "private")}
+              className="flex w-full items-center justify-between rounded-lg border border-zinc-200 px-3 py-2.5 text-left dark:border-zinc-800"
+            >
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm text-zinc-900 dark:text-zinc-50">Private</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Only you see the details
+                </span>
+              </span>
+              <span
+                className={`flex h-5 w-9 flex-none rounded-full p-0.5 transition-colors ${
+                  visibility === "private" ? "" : "bg-zinc-200 dark:bg-zinc-700"
+                }`}
+                style={
+                  visibility === "private" ? { background: "var(--cal-accent)" } : undefined
+                }
+              >
+                <span
+                  className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                    visibility === "private" ? "translate-x-4" : ""
+                  }`}
+                />
+              </span>
+            </button>
           </div>
           <div className="mt-3 text-xs text-zinc-500">
             {editing
               ? `Last start: ${format(start, "d MMM HH:mm")}`
               : "Saved to your connected calendar."}
+          </div>
+          </div>
+          <div className="flex items-center justify-between border-t border-zinc-200 bg-zinc-50 px-5 py-3 dark:border-zinc-800 dark:bg-[#0f0f11]">
+            <div>
+              {editing && (
+                <button
+                  onClick={remove}
+                  disabled={pending}
+                  className="flex h-9 items-center rounded-lg border border-zinc-200 bg-white px-3.5 text-sm text-red-700 hover:bg-red-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                disabled={pending}
+                className="flex h-9 items-center rounded-lg border border-zinc-200 bg-white px-3.5 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={save}
+                disabled={pending}
+                className="flex h-9 items-center rounded-lg px-4 text-sm font-medium text-white disabled:opacity-60"
+                style={{ background: "var(--cal-accent)" }}
+              >
+                {pending ? "Saving…" : "Save"}
+              </button>
+            </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

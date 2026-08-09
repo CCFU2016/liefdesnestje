@@ -7,6 +7,7 @@ import { format, parse, startOfWeek, getDay } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import "react-big-calendar/lib/css/react-big-calendar.css";
+import { Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EventDialog } from "./event-dialog";
@@ -206,15 +207,9 @@ export function CalendarShell({
     const r = (event as RBCEvent & { resource: EventRow }).resource;
     const cal = r.calendarId ? calendarsById.get(r.calendarId) : null;
     const color = cal?.color ?? "#4f46e5";
-    return {
-      style: {
-        backgroundColor: color,
-        borderRadius: 4,
-        border: "none",
-        color: "white",
-        fontSize: 12,
-      },
-    };
+    // The chrome CSS renders the pill (neutral surface + 3px colored bar);
+    // we only supply the per-calendar color.
+    return { style: { "--pill-c": color } as React.CSSProperties };
   };
 
   if (accounts.length === 0) {
@@ -296,7 +291,7 @@ export function CalendarShell({
               />
             </div>
           ) : (
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 overflow-hidden">
+            <div className="overflow-hidden">
               <Calendar
                 localizer={localizer}
                 formats={formats}
@@ -310,6 +305,26 @@ export function CalendarShell({
                 onNavigate={setAnchor}
                 views={views}
                 messages={{}}
+                components={{
+                  toolbar: (tp) => (
+                    <CalendarToolbar
+                      label={tp.label}
+                      view={tp.view}
+                      views={["month", "week", "day", "agenda"]}
+                      onView={(v) => tp.onView(v as View)}
+                      onNavigate={(a) => tp.onNavigate(a)}
+                      onSync={syncNow}
+                      onNew={() => {
+                        const start = new Date();
+                        start.setMinutes(0, 0, 0);
+                        start.setHours(start.getHours() + 1);
+                        const end = new Date(start);
+                        end.setHours(end.getHours() + 1);
+                        setDialog({ slot: { start, end } });
+                      }}
+                    />
+                  ),
+                }}
                 length={30}
                 scrollToTime={scrollToTime}
                 selectable
@@ -328,44 +343,48 @@ export function CalendarShell({
               />
             </div>
           )}
-          {/* Legend — click a calendar to toggle its visibility */}
+          {/* Legend — tap a calendar chip to toggle its visibility */}
           {(calendars.length > 0 || members.length > 0) && (
-            <div className="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <p className="text-[11px] uppercase tracking-wider text-zinc-500">
-                  Legend · tap to filter
-                </p>
-                <button
-                  onClick={syncNow}
-                  className="text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 px-1.5 py-0.5 rounded"
-                >
-                  Sync now
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+            <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5">
+              <div className="flex flex-wrap gap-2">
                 {calendars.map((c) => {
                   const hidden = hiddenCalendars.has(c.id);
                   return (
                     <button
                       key={c.id}
                       onClick={() => toggleCalendar(c.id)}
-                      className={`flex items-center gap-1.5 transition-opacity ${
-                        hidden ? "opacity-40" : "opacity-100 hover:opacity-80"
+                      className={`inline-flex h-8 items-center gap-[7px] rounded-full border border-zinc-200 dark:border-zinc-800 px-3 text-[13px] transition-colors ${
+                        hidden
+                          ? "bg-transparent text-zinc-400 dark:text-zinc-500"
+                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50"
                       }`}
-                      title={hidden ? "Click to show" : "Click to hide"}
+                      title={hidden ? "Tap to show" : "Tap to hide"}
                     >
                       <span
-                        className="inline-block h-3 w-3 rounded-sm"
-                        style={{
-                          background: hidden ? "transparent" : c.color,
-                          border: `2px solid ${c.color}`,
-                        }}
+                        className="inline-block h-2.5 w-2.5 rounded-full flex-none"
+                        style={
+                          hidden
+                            ? { border: `1.5px solid ${c.color}`, opacity: 0.6 }
+                            : { background: c.color }
+                        }
                       />
-                      <span className={hidden ? "line-through" : ""}>{c.name}</span>
+                      {c.name}
                     </button>
                   );
                 })}
               </div>
+              <span className="hidden sm:block text-xs text-zinc-400 shrink-0">
+                Tap to show or hide
+              </span>
+              {/* Mobile keeps a sync affordance here — desktop has it in the toolbar */}
+              {onMobile && (
+                <button
+                  onClick={syncNow}
+                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-50 shrink-0"
+                >
+                  ↻ Sync
+                </button>
+              )}
             </div>
           )}
           {isLoading && <div className="text-xs text-zinc-500 mt-2">Loading…</div>}
@@ -389,6 +408,89 @@ export function CalendarShell({
           initialSlot={dialog.slot ?? null}
         />
       )}
+    </div>
+  );
+}
+
+// Design: joined [‹ Today ›] group + 20px month label on the left;
+// segmented view switcher + Sync now + sage "New" button on the right.
+function CalendarToolbar({
+  label,
+  view,
+  views,
+  onView,
+  onNavigate,
+  onSync,
+  onNew,
+}: {
+  label: string;
+  view: string;
+  views: string[];
+  onView: (v: string) => void;
+  onNavigate: (action: "PREV" | "NEXT" | "TODAY") => void;
+  onSync: () => void;
+  onNew: () => void;
+}) {
+  const viewLabel = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="flex overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <button
+            onClick={() => onNavigate("PREV")}
+            className="flex h-8 w-8 items-center justify-center border-r border-zinc-200 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Previous"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => onNavigate("TODAY")}
+            className="flex h-8 items-center border-r border-zinc-200 px-3 text-[13px] font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-50 dark:hover:bg-zinc-800"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => onNavigate("NEXT")}
+            className="flex h-8 w-8 items-center justify-center text-sm text-zinc-600 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            aria-label="Next"
+          >
+            ›
+          </button>
+        </div>
+        <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          {label}
+        </h2>
+      </div>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex gap-0.5 rounded-lg border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-800 dark:bg-zinc-900">
+          {views.map((v) => (
+            <button
+              key={v}
+              onClick={() => onView(v)}
+              className={`rounded-md px-3 py-[5px] text-[13px] transition-colors ${
+                v === view
+                  ? "bg-white font-medium text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"
+              }`}
+            >
+              {viewLabel(v)}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onSync}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-[13px] text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Sync now
+        </button>
+        <button
+          onClick={onNew}
+          className="flex h-8 items-center gap-1 rounded-lg px-3.5 text-[13px] font-medium text-white"
+          style={{ background: "var(--cal-accent)" }}
+        >
+          <Plus className="h-3.5 w-3.5" /> New
+        </button>
+      </div>
     </div>
   );
 }

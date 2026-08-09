@@ -79,32 +79,30 @@ export function MobileTimeGrid({
 
   return (
     <div className="flex flex-col h-full border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-950">
-      {/* Toolbar */}
-      <div className="shrink-0 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 px-2 py-1.5">
-        <div className="flex items-center gap-1">
+      {/* Toolbar — design 1c: range title left, square nav buttons right */}
+      <div className="shrink-0 flex items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
+        <button
+          onClick={() => onNavigate(today)}
+          className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+          title="Jump to today"
+        >
+          {format(dayList[0], "d MMM")} – {format(dayList[dayList.length - 1], "d MMM")}
+        </button>
+        <div className="flex gap-2">
           <button
             onClick={() => onNavigate(addDays(anchor, -days))}
-            className="px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"
             aria-label="Previous"
           >
             ‹
           </button>
           <button
-            onClick={() => onNavigate(today)}
-            className="px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            Today
-          </button>
-          <button
             onClick={() => onNavigate(addDays(anchor, days))}
-            className="px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"
             aria-label="Next"
           >
             ›
           </button>
-        </div>
-        <div className="text-sm font-medium">
-          {format(dayList[0], "d MMM")} – {format(dayList[dayList.length - 1], "d MMM yyyy")}
         </div>
       </div>
 
@@ -114,16 +112,22 @@ export function MobileTimeGrid({
         {dayList.map((day) => {
           const isToday = isSameDay(day, new Date());
           return (
-            <div
-              key={day.toISOString()}
-              className={`flex-1 text-center py-1.5 text-xs ${
-                isToday ? "bg-zinc-50 dark:bg-zinc-900" : ""
-              }`}
-            >
-              <div className="text-zinc-500 uppercase tracking-wider text-[10px]">
+            <div key={day.toISOString()} className="flex-1 text-center py-1.5">
+              <div className="text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.06em] text-[10px]">
                 {format(day, "EEE")}
               </div>
-              <div className={`font-semibold ${isToday ? "" : ""}`}>{format(day, "d")}</div>
+              {isToday ? (
+                <div
+                  className="mx-auto mt-0.5 flex h-[26px] w-[26px] items-center justify-center rounded-full text-sm font-semibold text-white"
+                  style={{ background: "var(--cal-accent)" }}
+                >
+                  {format(day, "d")}
+                </div>
+              ) : (
+                <div className="mt-0.5 text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  {format(day, "d")}
+                </div>
+              )}
             </div>
           );
         })}
@@ -147,9 +151,10 @@ export function MobileTimeGrid({
                 <button
                   key={`${seg.event.id}-${rowIdx}`}
                   onClick={() => onSelectEvent(seg.event)}
-                  className="absolute text-left text-[11px] text-white rounded px-1.5 truncate hover:brightness-110"
+                  className="absolute text-left text-[11px] rounded-md px-1.5 truncate text-zinc-800 dark:text-zinc-50"
                   style={{
-                    background: seg.event.color,
+                    background: `color-mix(in srgb, ${seg.event.color} 18%, transparent)`,
+                    borderLeft: `3px solid ${seg.event.color}`,
                     top: rowIdx * 22,
                     height: 20,
                     left: `calc(${(seg.startCol / days) * 100}% + 2px)`,
@@ -235,9 +240,10 @@ export function MobileTimeGrid({
                         evt.stopPropagation();
                         onSelectEvent(pe.event);
                       }}
-                      className="absolute rounded text-left px-1 py-0.5 text-white overflow-hidden shadow-sm hover:brightness-110"
+                      className="absolute rounded-md text-left px-1.5 py-0.5 overflow-hidden text-zinc-800 dark:text-zinc-50"
                       style={{
-                        background: pe.event.color,
+                        background: `color-mix(in srgb, ${pe.event.color} 18%, transparent)`,
+                        borderLeft: `3px solid ${pe.event.color}`,
                         top,
                         height,
                         left: `calc(${leftPct}% + 1px)`,
@@ -248,7 +254,7 @@ export function MobileTimeGrid({
                         {pe.event.title}
                       </div>
                       {height >= 28 && (
-                        <div className="text-[9px] opacity-80 tabular-nums">
+                        <div className="text-[9px] tabular-nums text-zinc-500 dark:text-zinc-400">
                           {format(pe.event.start, "HH:mm")}
                         </div>
                       )}
