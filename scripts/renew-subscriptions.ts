@@ -18,48 +18,58 @@ if (!url) throw new Error("DATABASE_URL is required");
 const client = postgres(url, { max: 1 });
 const db = drizzle(client, { schema });
 
-const threshold = new Date(Date.now() + 24 * 60 * 60 * 1000);
+async function main() {
+  const threshold = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-const due = await db
-  .select({
-    cal: schema.calendars,
-    account: schema.externalCalendarAccounts,
-  })
-  .from(schema.calendars)
-  .innerJoin(
-    schema.externalCalendarAccounts,
-    eq(schema.calendars.accountId, schema.externalCalendarAccounts.id)
-  )
-  .where(
-    and(
-      isNotNull(schema.calendars.subscriptionId),
-      lt(schema.calendars.subscriptionExpiresAt, threshold)
+  const due = await db
+    .select({
+      cal: schema.calendars,
+      account: schema.externalCalendarAccounts,
+    })
+    .from(schema.calendars)
+    .innerJoin(
+      schema.externalCalendarAccounts,
+      eq(schema.calendars.accountId, schema.externalCalendarAccounts.id)
     )
-  );
+    .where(
+      and(
+        isNotNull(schema.calendars.subscriptionId),
+        lt(schema.calendars.subscriptionExpiresAt, threshold)
+      )
+    );
 
-console.log(`Renewing ${due.length} subscription(s)`);
+  console.log(`Renewing ${due.length} subscription(s)`);
 
-for (const { cal, account } of due) {
-  if (!cal.subscriptionId || !cal.accountId) continue;
-  try {
-    if (account.provider === "microsoft") {
-      const renewed = await msRenew(cal.accountId, cal.subscriptionId);
-      await db
-        .update(schema.calendars)
-        .set({
-          subscriptionExpiresAt: new Date(renewed.expirationDateTime),
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.calendars.id, cal.id));
-    } else if (account.provider === "google") {
-      // Google channels aren't renewable — create a fresh one. subscribeCalendar
-      // stops the old channel first.
-      await googleSubscribe(cal.accountId, cal.id);
+  for (const { cal, account } of due) {
+    if (!cal.subscriptionId || !cal.accountId) continue;
+    try {
+      if (account.provider === "microsoft") {
+        const renewed = await msRenew(cal.accountId, cal.subscriptionId);
+        await db
+          .update(schema.calendars)
+          .set({
+            subscriptionExpiresAt: new Date(renewed.expirationDateTime),
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.calendars.id, cal.id));
+      } else if (account.provider === "google") {
+        // Google channels aren't renewable — create a fresh one. subscribeCalendar
+        // stops the old channel first.
+        await googleSubscribe(cal.accountId, cal.id);
+      }
+      console.log(`✓ ${account.provider}: ${cal.name}`);
+    } catch (e) {
+      console.error(`✗ renewal failed for ${cal.name}`, e);
     }
-    console.log(`✓ ${account.provider}: ${cal.name}`);
-  } catch (e) {
-    console.error(`✗ renewal failed for ${cal.name}`, e);
   }
+
+  await client.end();
 }
 
-await client.end();
+// NOTE: top-level await breaks under tsx's CJS output ("Top-level await is
+// currently not supported") — this script silently crashed on every cron run
+// until it was wrapped in main(). Keep it wrapped.
+main().catch((e) => {
+  console.error("[renew-subscriptions] fatal:", e);
+  process.exit(1);
+});
