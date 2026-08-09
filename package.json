@@ -20,7 +20,8 @@
     "e2e": "playwright test",
     "cron:renew-subscriptions": "tsx scripts/renew-subscriptions.ts",
     "cron:refresh-ics": "tsx scripts/refresh-ics.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "cron:daily-photo": "NODE_OPTIONS=--conditions=react-server tsx scripts/prewarm-daily-photo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
