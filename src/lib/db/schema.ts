@@ -535,6 +535,12 @@ export const travelReservations = pgTable(
     title: text("title").notNull(),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
     endAt: timestamp("end_at", { withTimezone: true }),
+    // IANA zones the start/end wall-clock times are local to (e.g. a flight
+    // departs in "Europe/Amsterdam" and lands in "America/New_York"). The
+    // timestamps above stay absolute instants; these only drive input and
+    // display. Null = legacy row, shown in the viewer's own zone.
+    startTz: text("start_tz"),
+    endTz: text("end_tz"),
     location: text("location"),
     confirmationCode: text("confirmation_code"),
     referenceUrl: text("reference_url"),

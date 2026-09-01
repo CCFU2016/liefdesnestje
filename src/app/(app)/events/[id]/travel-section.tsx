@@ -20,6 +20,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { TimeZoneSelect } from "@/components/ui/timezone-select";
+import {
+  browserTimeZone,
+  isValidTimeZone,
+  isoToZonedInput,
+  zonedInputToIso,
+} from "@/lib/timezones";
 
 export type Member = { userId: string; displayName: string; color: string };
 
@@ -38,6 +45,8 @@ type Reservation = {
   title: string;
   startAt: string; // ISO
   endAt: string | null;
+  startTz: string | null; // IANA zone startAt is local to; null = viewer's zone
+  endTz: string | null;
   location: string | null;
   confirmationCode: string | null;
   referenceUrl: string | null;
@@ -76,6 +85,10 @@ function kindIcon(kind: ReservationKind, className = "h-4 w-4") {
       return <ChevronRight className={className} />;
   }
 }
+
+// Kinds where start and end happen in different places, so each end gets
+// its own time zone. Everything else (hotel, car, other) is one location.
+const SEGMENT_KINDS: ReadonlySet<ReservationKind> = new Set(["flight", "train", "ferry", "transit"]);
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -232,7 +245,12 @@ function ReservationRow({
               {r.title}
             </button>
             <div className="text-xs text-zinc-500 mt-0.5">
-              <LocalTimeRange startIso={r.startAt} endIso={r.endAt} />
+              <LocalTimeRange
+                startIso={r.startAt}
+                endIso={r.endAt}
+                startTz={r.startTz}
+                endTz={r.endTz}
+              />
             </div>
             {(r.location || r.origin || r.destination) && (
               <div className="text-xs text-zinc-500 truncate">
@@ -314,11 +332,25 @@ function ReservationRow({
   );
 }
 
-// Renders the start/end datetime in the viewer's local timezone. Both ends
-// are client-formatted for the same reason reservation times were — the
-// server formatters live in UTC on Railway.
-function LocalTimeRange({ startIso, endIso }: { startIso: string; endIso: string | null }) {
-  const format = (iso: string) => {
+// Renders the start/end datetime, each in its own zone when the reservation
+// carries one (a flight departs in Amsterdam time and lands in New York
+// time), falling back to the viewer's zone for legacy rows. Client-formatted
+// because the server formatters live in UTC on Railway. The zone label is
+// shown once when both ends share a zone, per end when they differ.
+function LocalTimeRange({
+  startIso,
+  endIso,
+  startTz,
+  endTz,
+}: {
+  startIso: string;
+  endIso: string | null;
+  startTz: string | null;
+  endTz: string | null;
+}) {
+  const sTz = isValidTimeZone(startTz) ? startTz : undefined;
+  const eTz = isValidTimeZone(endTz) ? endTz : sTz;
+  const format = (iso: string, tz: string | undefined, withZone: boolean) => {
     try {
       return new Date(iso).toLocaleString(undefined, {
         weekday: "short",
@@ -327,15 +359,18 @@ function LocalTimeRange({ startIso, endIso }: { startIso: string; endIso: string
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
+        ...(tz ? { timeZone: tz } : {}),
+        ...(tz && withZone ? { timeZoneName: "short" } : {}),
       });
     } catch {
       return iso;
     }
   };
+  const sameZone = !endIso || sTz === eTz;
   return (
     <>
-      {format(startIso)}
-      {endIso ? ` → ${format(endIso)}` : ""}
+      {format(startIso, sTz, !sameZone || !endIso)}
+      {endIso ? ` → ${format(endIso, eTz, true)}` : ""}
     </>
   );
 }
@@ -362,8 +397,23 @@ function ReservationDialog({
 
   const [kind, setKind] = useState<ReservationKind>(existing?.kind ?? "hotel");
   const [title, setTitle] = useState(existing?.title ?? "");
-  const [startAt, setStartAt] = useState(toInputDatetime(existing?.startAt));
-  const [endAt, setEndAt] = useState(toInputDatetime(existing?.endAt ?? null));
+  // Zones default to the viewer's own, which is what the form implicitly
+  // assumed before zones existed — so legacy rows open showing the same
+  // wall time they always did.
+  const [startTz, setStartTz] = useState(() =>
+    isValidTimeZone(existing?.startTz) ? existing.startTz : browserTimeZone()
+  );
+  const [endTz, setEndTz] = useState(() =>
+    isValidTimeZone(existing?.endTz)
+      ? existing.endTz
+      : isValidTimeZone(existing?.startTz)
+        ? existing.startTz
+        : browserTimeZone()
+  );
+  // Inputs hold wall-clock text in their zone; conversion to an instant
+  // happens only on save, so switching the zone keeps "12:30" as typed.
+  const [startAt, setStartAt] = useState(() => isoToZonedInput(existing?.startAt, startTz));
+  const [endAt, setEndAt] = useState(() => isoToZonedInput(existing?.endAt ?? null, endTz));
   const [location, setLocation] = useState(existing?.location ?? "");
   const [confirmationCode, setConfirmationCode] = useState(existing?.confirmationCode ?? "");
   const [origin, setOrigin] = useState(existing?.origin ?? "");
@@ -376,6 +426,9 @@ function ReservationDialog({
   const [busy, setBusy] = useState(false);
 
   const isFlightOrTrain = kind === "flight" || kind === "train";
+  const isSegment = SEGMENT_KINDS.has(kind);
+  // Single-place kinds use one zone for both ends.
+  const effectiveEndTz = isSegment ? endTz : startTz;
 
   const toggleTraveler = (id: string) => {
     setTravelerIds((prev) => {
@@ -406,6 +459,8 @@ function ReservationDialog({
           title: string;
           startAt: string;
           endAt: string | null;
+          startTimeZone: string | null;
+          endTimeZone: string | null;
           location: string | null;
           confirmationCode: string | null;
           origin: string | null;
@@ -416,8 +471,14 @@ function ReservationDialog({
       };
       setKind(data.extracted.kind);
       setTitle(data.extracted.title);
-      setStartAt(toInputDatetime(data.extracted.startAt));
-      setEndAt(toInputDatetime(data.extracted.endAt));
+      // Show each end in the zone the ticket names; fall back to whatever
+      // the form already had so a partial extraction never blanks a zone.
+      const sTz = isValidTimeZone(data.extracted.startTimeZone) ? data.extracted.startTimeZone : startTz;
+      const eTz = isValidTimeZone(data.extracted.endTimeZone) ? data.extracted.endTimeZone : sTz;
+      setStartTz(sTz);
+      setEndTz(eTz);
+      setStartAt(isoToZonedInput(data.extracted.startAt, sTz));
+      setEndAt(isoToZonedInput(data.extracted.endAt, eTz));
       setLocation(data.extracted.location ?? "");
       setConfirmationCode(data.extracted.confirmationCode ?? "");
       setOrigin(data.extracted.origin ?? "");
@@ -444,8 +505,10 @@ function ReservationDialog({
     const payload = {
       kind,
       title: title.trim(),
-      startAt: new Date(startAt).toISOString(),
-      endAt: endAt ? new Date(endAt).toISOString() : null,
+      startAt: zonedInputToIso(startAt, startTz),
+      endAt: endAt ? zonedInputToIso(endAt, effectiveEndTz) : null,
+      startTz,
+      endTz: endAt ? effectiveEndTz : null,
       location: location.trim() || null,
       confirmationCode: confirmationCode.trim() || null,
       origin: origin.trim() || null,
@@ -586,24 +649,51 @@ function ReservationDialog({
 
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <label className="text-xs text-zinc-500">Start</label>
+                  <label className="text-xs text-zinc-500">
+                    {kind === "hotel" ? "Check-in" : isSegment ? "Departure" : "Start"}
+                  </label>
                   <Input
                     type="datetime-local"
                     value={startAt}
                     onChange={(e) => setStartAt(e.target.value)}
                   />
+                  {isSegment && (
+                    <TimeZoneSelect
+                      ariaLabel="Departure time zone"
+                      value={startTz}
+                      onChange={setStartTz}
+                    />
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-zinc-500">
-                    {kind === "hotel" ? "Check-out" : "End"}
+                    {kind === "hotel" ? "Check-out" : isSegment ? "Arrival" : "End"}
                   </label>
                   <Input
                     type="datetime-local"
                     value={endAt}
                     onChange={(e) => setEndAt(e.target.value)}
                   />
+                  {isSegment && (
+                    <TimeZoneSelect
+                      ariaLabel="Arrival time zone"
+                      value={endTz}
+                      onChange={setEndTz}
+                    />
+                  )}
                 </div>
               </div>
+
+              {isSegment ? (
+                <p className="text-xs text-zinc-500">
+                  Times are local to each end — enter them as printed on the ticket.
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-xs text-zinc-500">Time zone</label>
+                  <TimeZoneSelect ariaLabel="Time zone" value={startTz} onChange={setStartTz} />
+                </div>
+              )}
 
               {isFlightOrTrain ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -690,14 +780,6 @@ function ReservationDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
-}
-
-function toInputDatetime(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function buildMapsUrl(r: {

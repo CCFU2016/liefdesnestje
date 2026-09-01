@@ -113,6 +113,7 @@ export default async function TodayPage({
         title: travelReservations.title,
         startAt: travelReservations.startAt,
         endAt: travelReservations.endAt,
+        startTz: travelReservations.startTz,
         location: travelReservations.location,
         origin: travelReservations.origin,
         destination: travelReservations.destination,
@@ -457,7 +458,11 @@ export default async function TodayPage({
                         </Link>
                         <div className="text-xs text-zinc-500 truncate">
                           {whenLabel ?? (
-                            <LocalTime iso={startDate.toISOString()} fallback="…" />
+                            <LocalTime
+                              iso={startDate.toISOString()}
+                              fallback="…"
+                              timeZone={r.startTz ?? undefined}
+                            />
                           )}
                           {subtitle ? ` · ${subtitle}` : ""}
                         </div>

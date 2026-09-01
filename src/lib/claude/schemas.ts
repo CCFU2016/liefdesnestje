@@ -88,6 +88,10 @@ export const ExtractedReservationSchema = z.object({
   // ISO 8601 strings. startAt is required; for hotels use check-in date-time.
   startAt: z.string(),
   endAt: z.string().nullable(),
+  // IANA zones the start/end times are local to — departure airport's zone
+  // for startTimeZone, arrival airport's for endTimeZone; hotel's for both.
+  startTimeZone: z.string().nullable(),
+  endTimeZone: z.string().nullable(),
   location: z.string().nullable(),
   confirmationCode: z.string().nullable(),
   origin: z.string().nullable(),

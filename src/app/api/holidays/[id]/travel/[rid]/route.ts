@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 import { holidays, householdMembers, travelReservations } from "@/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { isValidTimeZone } from "@/lib/timezones";
+
+// IANA zone id, validated against the runtime's tz database.
+const timeZoneSchema = z.string().max(64).refine(isValidTimeZone, { message: "Unknown time zone" });
 
 const reservationKinds = [
   "hotel",
@@ -20,6 +24,8 @@ const patchSchema = z.object({
   title: z.string().min(1).max(300).optional(),
   startAt: z.string().datetime({ offset: true }).optional(),
   endAt: z.string().datetime({ offset: true }).nullable().optional(),
+  startTz: timeZoneSchema.nullable().optional(),
+  endTz: timeZoneSchema.nullable().optional(),
   location: z.string().max(500).nullable().optional(),
   confirmationCode: z.string().max(100).nullable().optional(),
   referenceUrl: z.string().url().nullable().optional(),
@@ -81,6 +87,8 @@ export async function PATCH(
     if (body.data.title !== undefined) update.title = body.data.title;
     if (body.data.startAt !== undefined) update.startAt = new Date(body.data.startAt);
     if (body.data.endAt !== undefined) update.endAt = body.data.endAt ? new Date(body.data.endAt) : null;
+    if (body.data.startTz !== undefined) update.startTz = body.data.startTz;
+    if (body.data.endTz !== undefined) update.endTz = body.data.endTz;
     if (body.data.location !== undefined) update.location = body.data.location;
     if (body.data.confirmationCode !== undefined) update.confirmationCode = body.data.confirmationCode;
     if (body.data.referenceUrl !== undefined) update.referenceUrl = body.data.referenceUrl;

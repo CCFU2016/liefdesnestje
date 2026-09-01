@@ -51,6 +51,8 @@ Rules:
   - Flights: departure date and time at the origin airport.
   - Trains: departure time.
 - "endAt": ISO 8601. Hotels: checkout. Flights: arrival. Return null if no clear end.
+- Times on tickets are always LOCAL to the place they happen. A flight departing AMS 10:00 and landing JFK 12:30 is 10:00 Amsterdam time and 12:30 New York time — keep each as written and attach the correct offset for that place rather than converting either.
+- "startTimeZone" / "endTimeZone": IANA zone ids (e.g. "Europe/Amsterdam", "America/New_York") for where the start and end happen. Flights/trains/ferries: origin's zone and destination's zone. Hotels/car rentals: the property's zone for both. Infer from the airport, station, or address; null if you can't tell.
 - "location" for hotels: full street address including city.
 - "origin"/"destination": IATA codes when visible for flights (AMS, JFK). For trains/cars use station or city names.
 - "confirmationCode": booking reference / PNR / reservation code if present.

@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 import { holidays, householdMembers, travelReservations } from "@/lib/db/schema";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { isValidTimeZone } from "@/lib/timezones";
+
+// IANA zone id, validated against the runtime's tz database.
+const timeZoneSchema = z.string().max(64).refine(isValidTimeZone, { message: "Unknown time zone" });
 
 const reservationKinds = [
   "hotel",
@@ -20,6 +24,8 @@ const createSchema = z.object({
   title: z.string().min(1).max(300),
   startAt: z.string().datetime({ offset: true }),
   endAt: z.string().datetime({ offset: true }).nullable().optional(),
+  startTz: timeZoneSchema.nullable().optional(),
+  endTz: timeZoneSchema.nullable().optional(),
   location: z.string().max(500).nullable().optional(),
   confirmationCode: z.string().max(100).nullable().optional(),
   referenceUrl: z.string().url().nullable().optional(),
@@ -102,6 +108,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         title: body.data.title,
         startAt: new Date(body.data.startAt),
         endAt: body.data.endAt ? new Date(body.data.endAt) : null,
+        startTz: body.data.startTz ?? null,
+        endTz: body.data.endTz ?? null,
         location: body.data.location ?? null,
         confirmationCode: body.data.confirmationCode ?? null,
         referenceUrl: body.data.referenceUrl ?? null,

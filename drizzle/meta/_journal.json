@@ -176,6 +176,13 @@
       "when": 1786082646722,
       "tag": "0024_trips",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788292696719,
+      "tag": "0025_travel_timezones",
+      "breakpoints": true
     }
   ]
 }
