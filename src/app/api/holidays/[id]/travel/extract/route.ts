@@ -59,24 +59,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Persist the document alongside other travel files for this event so
     // the user can re-open it from the reservation later. We save into a
     // subdir keyed by the holiday so they stay organized.
+    // Keep the original name (and its extension, so the browser opens it
+    // inline) but strip anything path-like. Note `[/\\..]` as a character
+    // class matched every "." — that is how "x.pdf" used to become "x_pdf".
     const safeName =
-      (file.name || "reservation").replace(/[/\\..]/g, "_").slice(0, 120) ||
-      `reservation.${extFor(mime)}`;
-    const { relPath } = await saveUpload({
+      (file.name || "")
+        .replace(/[/\\]/g, "_")
+        .replace(/\.\.+/g, "_")
+        .replace(/[\0-\x1f"]/g, "_")
+        .trim()
+        .slice(0, 120) || `reservation.${extFor(mime)}`;
+    const { fileName } = await saveUpload({
       subdir: `holidays/${id}/travel`,
       filename: safeName,
       bytes,
       mime,
     });
-    // We reuse the existing holidays document GET pattern: served from
-    // /api/holidays/[id]/document?name=... — but that expects the file at
-    // UPLOAD_ROOT/holidays/<id>/<name>. Our subdir adds /travel/, so we
-    // expose a direct app-served URL via /api/uploads for now.
-    //
-    // NB: `/api/uploads/recipes/*` is the existing serve route; we mirror
-    // it via a shared travel-docs endpoint below so this URL resolves.
+    // Served by /api/holidays/[id]/travel/document, which resolves
+    // `path` relative to UPLOAD_ROOT/holidays/<id>/ and only accepts the
+    // travel/ subfolder.
     const documentUrl = `/api/holidays/${id}/travel/document?path=${encodeURIComponent(
-      relPath.split("/").slice(1).join("/") // drop top-level "holidays/<id>"
+      `travel/${fileName}`
     )}`;
 
     const base64 = Buffer.from(bytes).toString("base64");

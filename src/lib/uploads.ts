@@ -40,7 +40,7 @@ export async function saveUpload(input: {
   filename?: string; // if absent, we generate a UUID
   bytes: Uint8Array;
   mime: string;
-}): Promise<{ path: string; relPath: string }> {
+}): Promise<{ path: string; relPath: string; fileName: string }> {
   const dir = join(UPLOAD_ROOT, input.subdir);
   await mkdir(dir, { recursive: true });
 
@@ -54,7 +54,7 @@ export async function saveUpload(input: {
   const safeName = basename(name).replace(/[\\/]/g, "_").replace(/\.\./g, "_");
   const full = join(dir, safeName);
   await writeFile(full, input.bytes);
-  return { path: full, relPath: join(input.subdir, safeName) };
+  return { path: full, relPath: join(input.subdir, safeName), fileName: safeName };
 }
 
 /**

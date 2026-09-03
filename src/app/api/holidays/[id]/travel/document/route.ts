@@ -6,6 +6,7 @@ import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
 import { UPLOAD_ROOT } from "@/lib/uploads";
+import { sniffMime } from "@/lib/file-magic";
 
 // Auth-gated serve for per-event travel docs (PDFs / reservation screenshots).
 // Same household-scoped access check as the rest of the holiday routes.
@@ -28,10 +29,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!path) return NextResponse.json({ error: "missing path" }, { status: 400 });
 
     // Guard path traversal — the `path` is expected to be travel/<filename>.
-    const rel = normalize(path);
+    let rel = normalize(path);
     if (rel.startsWith("..") || rel.includes("\0")) {
       return NextResponse.json({ error: "bad path" }, { status: 400 });
     }
+    // Links written before the path builder was fixed carry a leading
+    // "<holidayId>/" (the builder dropped only "holidays/", not the id).
+    // Accept that shape too so existing reservations keep working — but
+    // only for this holiday's own id, never someone else's.
+    if (rel.startsWith(`${id}/`)) rel = rel.slice(id.length + 1);
     if (!rel.startsWith("travel/")) {
       return NextResponse.json({ error: "bad path" }, { status: 400 });
     }
@@ -45,10 +51,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const bytes = await readFile(full);
-    const mime = guessMime(rel);
+    // Sniff the real type: older uploads lost their extension ("x_pdf"),
+    // and a bare extension guess would make the browser download them
+    // instead of opening them inline.
+    const mime = sniffMime(new Uint8Array(bytes)) ?? guessMime(rel);
+    const filename = downloadName(rel, mime);
     return new NextResponse(new Uint8Array(bytes), {
       headers: {
         "content-type": mime,
+        "content-disposition": `inline; filename="${filename}"`,
         "cache-control": "private, max-age=300",
       },
     });
@@ -69,4 +80,30 @@ function guessMime(p: string): string {
   if (lower.endsWith(".gif")) return "image/gif";
   if (lower.endsWith(".webp")) return "image/webp";
   return "application/octet-stream";
+}
+
+// Human-friendly name for the browser's viewer / save dialog. Restores the
+// extension that older uploads had mangled into "_pdf" / "_jpg".
+function downloadName(rel: string, mime: string): string {
+  const base = rel.split("/").pop() ?? "document";
+  const ext = extFor(mime);
+  const cleaned = base.replace(new RegExp(`[._]${ext}$`, "i"), "");
+  return `${cleaned || "document"}.${ext}`.replace(/["\\\r\n]/g, "_");
+}
+
+function extFor(mime: string): string {
+  switch (mime) {
+    case "application/pdf":
+      return "pdf";
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/gif":
+      return "gif";
+    case "image/webp":
+      return "webp";
+    default:
+      return "bin";
+  }
 }
