@@ -69,6 +69,7 @@ export async function exchangeCode(code: string): Promise<TokenBundle> {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -90,6 +91,7 @@ export async function refreshTokens(refreshToken: string): Promise<TokenBundle> 
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const err = await res.text();

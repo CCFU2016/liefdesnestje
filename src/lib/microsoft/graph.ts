@@ -3,8 +3,10 @@ import { externalCalendarAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt, encrypt } from "@/lib/auth/encryption";
 import { refreshTokens } from "./oauth";
+import { deltaWindowFor } from "@/lib/calendar-sync/helpers";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+const FETCH_TIMEOUT_MS = 30_000;
 
 /**
  * Returns a valid access token for the given account, refreshing if needed.
@@ -45,6 +47,9 @@ export async function graphFetch<T>(
   const url = pathOrUrl.startsWith("http") ? pathOrUrl : `${GRAPH}${pathOrUrl}`;
   const res = await fetch(url, {
     ...init,
+    // Graph occasionally hangs; without a deadline a stuck sync holds the
+    // per-calendar lock (and a webhook microtask) forever.
+    signal: init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
@@ -109,21 +114,36 @@ export async function listCalendars(accountId: string): Promise<MsCalendar[]> {
   return res.value;
 }
 
+export type DeltaEventsResult = {
+  value: MsEvent[];
+  nextDeltaLink: string | null;
+  /**
+   * Set only when this call minted a fresh window (no deltaLink passed). The
+   * caller stores `end` on the calendar row and uses the bounds to tombstone
+   * local rows the full pull didn't return.
+   */
+  window: { start: Date; end: Date } | null;
+};
+
 export async function deltaEvents(
   accountId: string,
   calendarExternalId: string,
   deltaLink: string | null
-): Promise<{ value: MsEvent[]; nextDeltaLink: string | null }> {
+): Promise<DeltaEventsResult> {
   let url: string;
+  let window: DeltaEventsResult["window"] = null;
   if (deltaLink) {
     // Subsequent round — reuse the opaque deltaLink as-is (it encodes the window).
     url = deltaLink;
   } else {
     // Initial round — Graph requires an explicit time window and a Prefer
-    // header. Use a sliding 90d-back / 365d-forward window.
-    const startDateTime = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const endDateTime = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-    const qs = new URLSearchParams({ startDateTime, endDateTime });
+    // header. 90d-back / 365d-forward; the window is baked into every
+    // deltaLink derived from it, so sync.ts re-mints it before it runs out.
+    window = deltaWindowFor(new Date());
+    const qs = new URLSearchParams({
+      startDateTime: window.start.toISOString(),
+      endDateTime: window.end.toISOString(),
+    });
     url = `/me/calendars/${calendarExternalId}/calendarView/delta?${qs}`;
   }
 
@@ -150,7 +170,7 @@ export async function deltaEvents(
       next = null;
     }
   }
-  return { value: all, nextDeltaLink: delta };
+  return { value: all, nextDeltaLink: delta, window };
 }
 
 export async function createEvent(

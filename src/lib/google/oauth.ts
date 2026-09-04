@@ -72,6 +72,7 @@ export async function exchangeCode(code: string): Promise<TokenBundle> {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     throw new Error(`Google token exchange failed: ${res.status} ${await res.text()}`);
@@ -91,6 +92,7 @@ export async function refreshTokens(refreshToken: string): Promise<TokenBundle> 
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     throw new Error(`Google token refresh failed: ${res.status} ${await res.text()}`);
