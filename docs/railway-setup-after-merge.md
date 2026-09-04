@@ -6,7 +6,7 @@ You will need: the Railway dashboard (railway.com, project **blissful-commitment
 
 ## Status (4 Sep 2026)
 
-Most of this was done through the Railway CLI/API already. What is left for **you**:
+Almost everything was done through the Railway CLI/API. Backups go to a Railway volume on the backup service (Railway's own snapshots need the Pro plan; an off-site bucket remains an option, see `backup/README.md`).
 
 | Step | Status |
 |---|---|
@@ -14,12 +14,11 @@ Most of this was done through the Railway CLI/API already. What is left for **yo
 | Part 1 · `CRON_SECRET` on the app | done |
 | Part 2 · `APP_URL` + `CRON_SECRET` on *nightly photo* | done |
 | Part 2 · delete the spare volumes | **needs your OK** — irreversible, see Part 2 step 4 |
-| Part 3a · Cloudflare bucket + API token | **you** (needs your Cloudflare login) |
-| Part 3b · Railway `backup` service | created, configured, all variables set — **three placeholders** left for the Cloudflare values |
-| Part 3c · first run + check | **you**, after 3a and the merge |
-| Part 4 · health check path | will be set right after the merge |
+| Part 3 · backup service, its volume, all variables | done |
+| Part 3 · first run + check | **you**, after the merge (see 3c) |
+| Part 4 · health check path | set right after the merge |
 
-The full click-by-click text is kept below in case anything has to be redone by hand.
+Parts 3a/3b below describe the off-site-bucket variant and are **not needed** for the current setup; they stay for reference.
 
 ---
 
@@ -121,7 +120,7 @@ This is the important one. Right now the database and every uploaded file exist 
 
 4. Click **Deploy** ("Apply changes"). Railway rebuilds the service with the Dockerfile (2–3 minutes the first time).
 
-### 3c. Run it once by hand and check (5 min)
+### 3c. Run it once by hand and check (5 min) — this is the part for you
 
 1. **Deployments** tab → three-dots menu on the latest deployment → **Redeploy**. A cron service runs its job when you redeploy it.
 2. Open **View logs**. A good run ends with:
@@ -133,7 +132,7 @@ This is the important one. Right now the database and every uploaded file exist 
    ```
 
    followed by a short file listing from the bucket.
-3. Go back to Cloudflare → R2 → `liefdesnestje-backups` → folder `prod`. Both files should be there. The database dump is a few MB; the uploads archive a few hundred MB.
+3. With the current (Railway volume) setup the listing at the end of the log shows `daily/db-….dump` and `daily/uploads-….tar.gz`. The dump is a few MB; the archive a few hundred MB.
 
 If the log instead says:
 
