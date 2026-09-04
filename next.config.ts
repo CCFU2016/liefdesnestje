@@ -24,9 +24,10 @@ const SECURITY_HEADERS = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // 'unsafe-inline' stays until we move to a nonce-based policy; a
-      // production Next.js build does not need 'unsafe-eval', so it is gone.
-      "script-src 'self' 'unsafe-inline'",
+      // 'unsafe-inline' stays until we move to a nonce-based policy. A
+      // production build does not need 'unsafe-eval'; the dev server does
+      // (webpack eval source maps + React Refresh), so it is dev-only.
+      `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
