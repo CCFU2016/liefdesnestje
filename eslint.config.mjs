@@ -27,6 +27,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "public/sw.js",
     ".local-db/**",
+    ".claude/**",
   ]),
 ]);
 

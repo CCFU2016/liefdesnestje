@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   title: "Liefdesnestje",
   description: "Our little shared home hub.",
   applicationName: "Liefdesnestje",
+  // Private app: keep it out of search engines (robots.ts disallows crawling too).
+  robots: { index: false, follow: false, nocache: true },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
