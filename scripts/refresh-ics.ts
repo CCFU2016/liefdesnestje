@@ -10,6 +10,19 @@ async function main() {
   // bar.
   const result = await refreshStaleIcs(4 * 60 * 60 * 1000);
   console.log(`ICS refresh: ${result.refreshed} ok, ${result.failed} failed`);
+
+  // Piggy-back housekeeping on this cron: old daily photos + their files,
+  // expired sessions, stale Claude usage rows. Never fails the refresh.
+  try {
+    const { pruneOldData } = await import("../src/lib/maintenance/prune");
+    const p = await pruneOldData();
+    console.log(
+      `Prune: ${p.photosDeleted} photos (${p.photoFilesDeleted} files), ${p.sessionsDeleted} sessions, ${p.tokensDeleted} tokens, ${p.usageRowsDeleted} usage rows` +
+        (p.errors.length ? `; errors: ${p.errors.join(" | ")}` : "")
+    );
+  } catch (e) {
+    console.error("Prune failed:", e instanceof Error ? e.message : e);
+  }
 }
 
 main()

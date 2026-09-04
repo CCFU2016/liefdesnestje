@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import { requireEnv as _requireEnv } from "@/lib/env";
 import { RRule } from "rrule";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { MAX_EVENTS_PER_FEED, MAX_ICS_BYTES, expandRule, isRuleFrequencyAllowed, readTextCapped } from "./limits";
 
 void _requireEnv; // reserved for future use
 
@@ -35,18 +36,21 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
     };
     if (cal.icsEtag) headers["If-None-Match"] = cal.icsEtag;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    // One deadline for the whole exchange, body included. (An earlier
+    // version cleared its timer as soon as headers arrived, so a host that
+    // trickled the body could hold this worker forever.)
+    const signal = AbortSignal.timeout(30_000);
     let res: Response;
     try {
-      res = await safeFetch(cal.icsUrl, { headers, signal: controller.signal });
+      res = await safeFetch(cal.icsUrl, { headers, signal });
     } catch (e) {
       if (e instanceof SafeFetchError) {
         throw new Error(`Feed URL rejected for safety: ${e.message}`);
       }
+      if (e instanceof Error && e.name === "TimeoutError") {
+        throw new Error("The feed took longer than 30 seconds to respond");
+      }
       throw e;
-    } finally {
-      clearTimeout(timeout);
     }
 
     if (res.status === 304) {
@@ -66,7 +70,7 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
     }
 
     const etag = res.headers.get("etag");
-    const text = await res.text();
+    const text = await readTextCapped(res, MAX_ICS_BYTES);
     if (!text.includes("BEGIN:VCALENDAR")) {
       throw new Error("Response doesn't look like ICS (no BEGIN:VCALENDAR)");
     }
@@ -110,9 +114,14 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
         ((vevent.start as Date & { tz?: string }).tz as string | undefined) ?? "UTC";
 
       if (vevent.rrule) {
-        // Recurring master: expand occurrences within the window.
+        // Recurring master: expand occurrences within the window, capped
+        // per event; sub-daily rules are skipped (see ./limits.ts).
         const rule = vevent.rrule as unknown as RRule;
-        const occurrences = rule.between(windowStart, windowEnd, true);
+        if (!isRuleFrequencyAllowed(rule)) {
+          console.warn(`[ics] ${cal.name}: skipping sub-daily recurrence for "${title}"`);
+          continue;
+        }
+        const occurrences = expandRule(rule, windowStart, windowEnd);
         const durationMs =
           (vevent.end as Date).getTime() - (vevent.start as Date).getTime();
         for (const occ of occurrences) {
@@ -147,6 +156,12 @@ export async function refreshIcsCalendar(calendarId: string): Promise<{
           organizerEmail,
         });
       }
+    }
+
+    if (incoming.length > MAX_EVENTS_PER_FEED) {
+      throw new Error(
+        `Feed has ${incoming.length} events in the sync window (limit ${MAX_EVENTS_PER_FEED}); refusing to import it`
+      );
     }
 
     // Upsert: find existing events for this calendar, diff by externalId.
