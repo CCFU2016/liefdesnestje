@@ -111,7 +111,7 @@ On Railway: add a **Cron** service → schedule `0 */6 * * *` → command `pnpm 
    - `pnpm cron:renew-subscriptions` on `0 */6 * * *` — renews Microsoft/Google webhook subscriptions (recreates one that Graph dropped).
    - `pnpm cron:refresh-ics` on `0 */6 * * *` — refreshes every ICS subscription and runs housekeeping (old daily photos, expired sessions, Claude usage rows).
    - `pnpm cron:daily-photo` on `35 23 * * *` — asks the app (`POST /api/internal/daily-photo`) to pre-pick tomorrow's photo; needs `APP_URL` and `CRON_SECRET`.
-7. Add the **backup** service: a fourth cron built from `backup/Dockerfile` that dumps Postgres and the uploads volume to an off-site bucket every night. Setup and restore steps are in [`backup/README.md`](backup/README.md). Do this before you trust the app with anything you would miss.
+7. Add the **backup** service (click-by-click walkthrough of this and the other post-merge steps: [`docs/railway-setup-after-merge.md`](docs/railway-setup-after-merge.md)): a fourth cron built from `backup/Dockerfile` that dumps Postgres and the uploads volume to an off-site bucket every night. Setup and restore steps are in [`backup/README.md`](backup/README.md). Do this before you trust the app with anything you would miss.
 8. Update your Azure app's redirect URIs + `NEXT_PUBLIC_APP_URL` to the Railway subdomain.
 9. Migrations run automatically on every start (`pnpm start` = `db:migrate && next start`). `GET /api/health` reports whether the database and the volume are reachable; point Railway's health check or an external pinger at it.
 
