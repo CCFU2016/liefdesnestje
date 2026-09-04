@@ -4,11 +4,16 @@ import { db } from "@/lib/db";
 import { notes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const patchSchema = z.object({
   title: z.string().max(200).optional(),
-  contentJson: z.unknown().optional(),
-  contentText: z.string().optional(),
+  // Editor document; bound by its serialised size since the shape is opaque.
+  contentJson: z
+    .unknown()
+    .refine((v) => (JSON.stringify(v)?.length ?? 0) <= 500_000, { message: "Note too large" })
+    .optional(),
+  contentText: z.string().max(200_000).optional(),
   pinned: z.boolean().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
 });
@@ -42,6 +47,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const ctx = await requireHouseholdMember();
     const { id } = await params;
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { mealPlanEntries, recipes } from "@/lib/db/schema";
 import { and, between, eq, isNull, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const createSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -12,8 +14,8 @@ const createSchema = z.object({
   servings: z.number().int().positive().nullable().optional(),
   visibility: z.enum(["private", "shared"]).default("shared"),
   restaurantName: z.string().min(1).max(200).nullable().optional(),
-  restaurantUrl: z.string().url().nullable().optional(),
-  restaurantMenuUrl: z.string().url().nullable().optional(),
+  restaurantUrl: httpUrl.nullable().optional(),
+  restaurantMenuUrl: httpUrl.nullable().optional(),
   restaurantAddress: z.string().max(300).nullable().optional(),
   reservationAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
@@ -69,6 +71,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

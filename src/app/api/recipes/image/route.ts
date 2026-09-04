@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
 import { IMAGE_MIME_TYPES, MAX_IMAGE_BYTES, saveUpload, type ImageMime } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
+import { MULTIPART_OVERHEAD_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 30;
 
@@ -11,6 +12,8 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   try {
     await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_IMAGE_BYTES + MULTIPART_OVERHEAD_BYTES);
+    if (tooBig) return tooBig;
 
     const form = await req.formData();
     const file = form.get("file");

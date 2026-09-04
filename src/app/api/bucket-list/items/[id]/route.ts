@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 import { bucketListItems } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const linkSchema = z.object({
-  url: z.string().trim().url().max(2048),
+  url: z.string().trim().pipe(httpUrl),
   label: z.string().trim().max(120).optional(),
 });
 
@@ -37,6 +39,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const ctx = await requireHouseholdMember();
     const { id } = await params;
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

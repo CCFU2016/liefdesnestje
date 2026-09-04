@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { holidays, householdMembers, travelReservations } from "@/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { httpOrAppUrl, httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 import { isValidTimeZone } from "@/lib/timezones";
 
 // IANA zone id, validated against the runtime's tz database.
@@ -28,12 +30,13 @@ const patchSchema = z.object({
   endTz: timeZoneSchema.nullable().optional(),
   location: z.string().max(500).nullable().optional(),
   confirmationCode: z.string().max(100).nullable().optional(),
-  referenceUrl: z.string().url().nullable().optional(),
+  referenceUrl: httpUrl.nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   origin: z.string().max(200).nullable().optional(),
   destination: z.string().max(200).nullable().optional(),
-  documentUrl: z.string().max(500).nullable().optional(),
-  travelerUserIds: z.array(z.string().uuid()).optional(),
+  // Either an external link or our own /api/holidays/<id>/travel/document?… path.
+  documentUrl: httpOrAppUrl.max(500).nullable().optional(),
+  travelerUserIds: z.array(z.string().uuid()).max(200).optional(),
 });
 
 async function loadForCaller(
@@ -61,6 +64,8 @@ export async function PATCH(
     const loaded = await loadForCaller(id, rid, ctx);
     if (!loaded) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

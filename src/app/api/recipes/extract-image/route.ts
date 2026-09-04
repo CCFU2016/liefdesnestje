@@ -7,12 +7,15 @@ import {
 } from "@/lib/claude";
 import { IMAGE_MIME_TYPES, MAX_IMAGE_BYTES, saveUpload, type ImageMime } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
+import { MULTIPART_OVERHEAD_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_IMAGE_BYTES + MULTIPART_OVERHEAD_BYTES);
+    if (tooBig) return tooBig;
 
     const form = await req.formData();
     const file = form.get("file");

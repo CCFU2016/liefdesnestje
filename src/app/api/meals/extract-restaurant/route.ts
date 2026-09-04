@@ -7,16 +7,20 @@ import {
   extractRestaurantFromText,
 } from "@/lib/claude";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
-const bodySchema = z.object({ url: z.string().url() });
+const bodySchema = z.object({ url: httpUrl });
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024; // 2MB
 
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
@@ -48,6 +52,9 @@ export async function POST(req: Request) {
         menuUrl = null;
       }
     }
+    // Claude output is untrusted: drop anything that isn't a plain http(s)
+    // link rather than failing the whole extraction over it.
+    if (menuUrl && !httpUrl.safeParse(menuUrl).success) menuUrl = null;
 
     return NextResponse.json({
       name: restaurant.name,
@@ -75,17 +82,16 @@ export async function POST(req: Request) {
 
 async function fetchBoundedHtml(url: string): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
+    // One deadline for headers *and* body — a slow-drip body used to hang
+    // here indefinitely once the timer was cleared after the headers.
     const res = await safeFetch(url, {
-      signal: controller.signal,
+      signal: AbortSignal.timeout(20_000),
       headers: {
         "User-Agent":
           "Mozilla/5.0 (compatible; Liefdesnestje/1.0; +https://github.com/CCFU2016/liefdesnestje)",
         Accept: "text/html,application/xhtml+xml",
       },
     });
-    clearTimeout(timeout);
     if (!res.ok) return null;
     const reader = res.body?.getReader();
     if (!reader) return null;

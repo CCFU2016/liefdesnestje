@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 import { bucketListItems, bucketListStars } from "@/lib/db/schema";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError } from "@/lib/auth/household";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const linkSchema = z.object({
-  url: z.string().trim().url().max(2048),
+  url: z.string().trim().pipe(httpUrl),
   label: z.string().trim().max(120).optional(),
 });
 
@@ -53,6 +55,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "A title is required" }, { status: 400 });
 

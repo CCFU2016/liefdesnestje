@@ -4,15 +4,16 @@ import { db } from "@/lib/db";
 import { externalCalendarAccounts, holidays, householdMembers } from "@/lib/db/schema";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 import { pushHolidayToCalendar } from "@/lib/calendar-push";
 import { ensureDefaultCategories } from "@/lib/event-categories";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().nullable().optional(),
+  description: z.string().max(20_000).nullable().optional(),
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  forPersons: z.array(z.string().uuid()).default([]),
+  forPersons: z.array(z.string().uuid()).max(200).default([]),
   categoryId: z.string().uuid().nullable().optional(),
   pushToCalendar: z.boolean().default(false),
   pushProvider: z.enum(["google", "microsoft"]).nullable().optional(),
@@ -49,6 +50,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

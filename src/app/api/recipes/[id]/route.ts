@@ -4,23 +4,25 @@ import { db } from "@/lib/db";
 import { recipes } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { httpOrAppUrl, httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const ingredientSchema = z.object({
-  quantity: z.string().nullable().optional(),
-  unit: z.string().nullable().optional(),
-  name: z.string().min(1),
-  notes: z.string().nullable().optional(),
+  quantity: z.string().max(2000).nullable().optional(),
+  unit: z.string().max(2000).nullable().optional(),
+  name: z.string().min(1).max(2000),
+  notes: z.string().max(2000).nullable().optional(),
 });
 
 const patchSchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  description: z.string().nullable().optional(),
+  description: z.string().max(20_000).nullable().optional(),
   servings: z.number().int().positive().optional(),
   prepTimeMinutes: z.number().int().nonnegative().nullable().optional(),
   cookTimeMinutes: z.number().int().nonnegative().nullable().optional(),
-  ingredients: z.array(ingredientSchema).optional(),
-  instructions: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
+  ingredients: z.array(ingredientSchema).max(200).optional(),
+  instructions: z.array(z.string().max(2000)).max(200).optional(),
+  tags: z.array(z.string().max(100)).max(200).optional(),
   nutritionPerServing: z
     .object({
       calories: z.number().nullable(),
@@ -31,8 +33,9 @@ const patchSchema = z.object({
     })
     .nullable()
     .optional(),
-  sourceUrl: z.string().url().nullable().optional(),
-  imageUrl: z.string().nullable().optional(),
+  sourceUrl: httpUrl.nullable().optional(),
+  // imageUrl is usually our own /api/uploads/... path; remote http(s) is fine too.
+  imageUrl: httpOrAppUrl.nullable().optional(),
   score: z.number().int().min(1).max(5).nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
   cookedIncrement: z.boolean().optional(),
@@ -67,6 +70,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const ctx = await requireHouseholdMember();
     const { id } = await params;
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

@@ -8,15 +8,23 @@ import {
 } from "@/lib/claude";
 import { detectSocialUrl } from "@/lib/social";
 import { downloadAndSaveImage } from "@/lib/uploads";
-import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { readBodyCapped, safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
-const bodySchema = z.object({ url: z.string().url() });
+const bodySchema = z.object({ url: httpUrl });
+
+// Post pages are a few hundred KB; the og: tags sit in <head> anyway.
+const MAX_HTML_BYTES = 2 * 1024 * 1024;
+const MAX_OEMBED_BYTES = 256 * 1024;
 
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
@@ -116,11 +124,14 @@ async function fetchTikTokOEmbed(
   url: string
 ): Promise<{ title?: string; author_name?: string; thumbnail_url?: string } | null> {
   try {
-    const res = await safeFetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
-      signal: AbortSignal.timeout(8000),
-    });
+    const res = await safeFetch(
+      `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(8000) },
+      { maxBytes: MAX_OEMBED_BYTES }
+    );
     if (!res.ok) return null;
-    return (await res.json()) as {
+    const text = new TextDecoder().decode(await readBodyCapped(res, MAX_OEMBED_BYTES));
+    return JSON.parse(text) as {
       title?: string;
       author_name?: string;
       thumbnail_url?: string;
@@ -137,16 +148,20 @@ async function scrapeOg(
   url: string
 ): Promise<{ ogTitle: string | null; ogDescription: string | null; ogImage: string | null }> {
   try {
-    const res = await safeFetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
-        Accept: "text/html",
+    const res = await safeFetch(
+      url,
+      {
+        signal: AbortSignal.timeout(10000),
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
+          Accept: "text/html",
+        },
       },
-    });
+      { maxBytes: MAX_HTML_BYTES }
+    );
     if (!res.ok) return { ogTitle: null, ogDescription: null, ogImage: null };
-    const html = await res.text();
+    const html = new TextDecoder().decode(await readBodyCapped(res, MAX_HTML_BYTES));
     return {
       ogTitle: matchMeta(html, "og:title") ?? matchMeta(html, "twitter:title"),
       ogDescription: matchMeta(html, "og:description") ?? matchMeta(html, "twitter:description"),
