@@ -4,7 +4,22 @@ A click-by-click guide. Budget about 45 minutes, most of it waiting for deploys.
 
 You will need: the Railway dashboard (railway.com, project **blissful-commitment**), a terminal (only for generating two random secrets), and for Part 3 a free Cloudflare account.
 
-Already done for you: `ALLOWED_EMAILS` on the app service is set to the two existing accounts.
+## Status (4 Sep 2026)
+
+Most of this was done through the Railway CLI/API already. What is left for **you**:
+
+| Step | Status |
+|---|---|
+| `ALLOWED_EMAILS` on the app | done (both existing accounts) |
+| Part 1 · `CRON_SECRET` on the app | done |
+| Part 2 · `APP_URL` + `CRON_SECRET` on *nightly photo* | done |
+| Part 2 · delete the spare volumes | **needs your OK** — irreversible, see Part 2 step 4 |
+| Part 3a · Cloudflare bucket + API token | **you** (needs your Cloudflare login) |
+| Part 3b · Railway `backup` service | created, configured, all variables set — **three placeholders** left for the Cloudflare values |
+| Part 3c · first run + check | **you**, after 3a and the merge |
+| Part 4 · health check path | will be set right after the merge |
+
+The full click-by-click text is kept below in case anything has to be redone by hand.
 
 ---
 
@@ -84,7 +99,7 @@ This is the important one. Right now the database and every uploaded file exist 
    - Under **Service name** rename it to `backup`.
    - Under **Source** → **Root Directory**: enter `backup` → click the tick. (This makes Railway build only the `backup/` folder, which contains a Dockerfile; Railway detects it automatically.)
    - Under **Deploy** → **Cron Schedule**: enter `15 3 * * *` (every night at 03:15 UTC, after the photo job). Click the tick.
-3. **Variables** tab. The quickest way is **Raw Editor** (button at the top right of the variables list). Paste the block below, then fill in the four values in angle brackets from your note, and click **Update Variables**.
+3. **Variables** tab. *(Already done: every variable below is set; only the three `REPLACE_ME…` values remain.)* Click each of `RCLONE_CONFIG_R2_ACCESS_KEY_ID`, `RCLONE_CONFIG_R2_SECRET_ACCESS_KEY` and `RCLONE_CONFIG_R2_ENDPOINT`, replace the placeholder with the value from your note, and click **Deploy** ("Apply changes"). If you ever have to recreate the service from scratch, the **Raw Editor** (top right of the variables list) accepts this whole block:
 
    ```
    DATABASE_URL=${{Postgres.DATABASE_URL}}
