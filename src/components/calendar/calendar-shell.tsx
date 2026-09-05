@@ -254,7 +254,14 @@ export function CalendarShell({
       <div>
         <div className="min-w-0">
           {onMobile ? (
-            <div style={{ height: "calc(100dvh - 180px)", minHeight: 480 }}>
+            // Header, page padding and the 56px tab bar, plus the home-indicator
+            // inset the bar pads itself with in the installed app.
+            <div
+              style={{
+                height: "calc(100dvh - 172px - env(safe-area-inset-bottom, 0px))",
+                minHeight: 480,
+              }}
+            >
               <MobileTimeGrid
                 events={rbcEvents.map(
                   (e): MobileEvent => ({

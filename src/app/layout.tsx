@@ -54,7 +54,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full flex flex-col font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           {children}
-          <Toaster richColors closeButton />
+          {/* On a phone a toast must clear the tab bar and the home-indicator inset. */}
+          <Toaster
+            richColors
+            closeButton
+            mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
+          />
         </ThemeProvider>
       </body>
     </html>
