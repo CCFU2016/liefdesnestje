@@ -272,7 +272,8 @@ export async function fetchAssetUrls(
   // Dump the raw response shape until we understand what Apple is sending.
   // Truncate to a few hundred chars so we don't spam logs with mega-strings.
   const rawStr = JSON.stringify(body ?? {}).slice(0, 600);
-  console.log("[icloud] webasseturls raw:", rawStr);
+  // Only the shape, never the body: it carries signed asset URLs.
+  console.log("[icloud] webasseturls raw:", rawStr.length, "bytes");
 
   const raw = body as {
     items?: Record<
