@@ -44,6 +44,17 @@ type Todo = {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+// "Mine" = things the signed-in person is expected to act on: assigned to
+// them, or unassigned but created by them (nobody else will pick those up).
+// Items assigned to the partner are hidden; "Anyone" items by the partner
+// are hidden too, since the partner is the natural owner of their own idea.
+export type TodoScope = "all" | "mine";
+export function isRelevantTo(todo: Pick<Todo, "assigneeId" | "authorId">, userId: string): boolean {
+  if (todo.assigneeId) return todo.assigneeId === userId;
+  return todo.authorId === userId;
+}
+const SCOPE_STORAGE_KEY = "todos:scope";
+
 export function TodosPage({
   initialLists,
   members,
@@ -61,13 +72,31 @@ export function TodosPage({
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [rrule, setRRule] = useState<string | null>(null);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [scope, setScope] = useState<TodoScope>("all");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(SCOPE_STORAGE_KEY) === "mine") setScope("mine");
+    } catch {
+      /* private mode etc. */
+    }
+  }, []);
+  const changeScope = (next: TodoScope) => {
+    setScope(next);
+    try {
+      localStorage.setItem(SCOPE_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const { data, mutate } = useSWR<{ todos: Todo[] }>(
     activeListId ? `/api/todos?listId=${activeListId}` : null,
     fetcher,
     { refreshInterval: 5000, revalidateOnFocus: true }
   );
-  const todos = (data?.todos ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
+  const allTodos = (data?.todos ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
+  const mineCount = allTodos.filter((t) => isRelevantTo(t, currentUserId)).length;
+  const todos = scope === "mine" ? allTodos.filter((t) => isRelevantTo(t, currentUserId)) : allTodos;
 
   // Local optimistic reorder
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
@@ -222,8 +251,35 @@ export function TodosPage({
 
         <div className="flex-1 min-w-0">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader className="flex-row items-center justify-between gap-2">
               <CardTitle>{lists.find((l) => l.id === activeListId)?.name ?? "To-dos"}</CardTitle>
+              <div
+                role="radiogroup"
+                aria-label="Show"
+                className="inline-flex rounded-md border border-zinc-200 p-0.5 text-xs dark:border-zinc-800"
+              >
+                {(
+                  [
+                    { value: "all", label: "All", count: allTodos.length },
+                    { value: "mine", label: "Mine", count: mineCount },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === opt.value}
+                    onClick={() => changeScope(opt.value)}
+                    className={`rounded px-2.5 py-1 tabular-nums transition-colors ${
+                      scope === opt.value
+                        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                    }`}
+                  >
+                    {opt.label} <span className="opacity-70">{opt.count}</span>
+                  </button>
+                ))}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <form
@@ -287,7 +343,11 @@ export function TodosPage({
                         />
                       ))}
                     {todos.length === 0 && (
-                      <li className="text-sm text-zinc-500 py-6 text-center">All clear.</li>
+                      <li className="text-sm text-zinc-500 py-6 text-center">
+                        {scope === "mine" && allTodos.length > 0
+                          ? "Nothing for you here — the rest is for your partner or anyone."
+                          : "All clear."}
+                      </li>
                     )}
                   </ul>
                 </SortableContext>

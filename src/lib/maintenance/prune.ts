@@ -9,8 +9,9 @@ import { UPLOAD_ROOT } from "@/lib/uploads";
 //   - daily photos (1–2 MB each; the 5 GB volume fills in ~7 years)
 //   - expired Auth.js sessions and verification tokens
 //   - the Claude usage ledger (only the current day matters for the cap)
-// Runs from the ICS refresh cron (every 6 h); every step is idempotent and
-// isolated so one failure never blocks the others.
+// Triggered by the ICS refresh cron (every 6 h) via POST /api/internal/prune
+// so it executes in the app container, where the photo files actually are.
+// Every step is idempotent and isolated so one failure never blocks the others.
 
 export type PruneResult = {
   photosDeleted: number;

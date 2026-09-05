@@ -109,7 +109,7 @@ On Railway: add a **Cron** service → schedule `0 */6 * * *` → command `pnpm 
 5. Add a **Volume** mounted at `/data` and set `UPLOAD_DIR=/data/uploads`. Every uploaded file (event documents, travel tickets, avatars, daily photos) lives there and nowhere else — which is why step 7 exists.
 6. Add three **Cron services** pointing at the same repo. They share the database but **not** the volume, so none of them may write files:
    - `pnpm cron:renew-subscriptions` on `0 */6 * * *` — renews Microsoft/Google webhook subscriptions (recreates one that Graph dropped).
-   - `pnpm cron:refresh-ics` on `0 */6 * * *` — refreshes every ICS subscription and runs housekeeping (old daily photos, expired sessions, Claude usage rows).
+   - `pnpm cron:refresh-ics` on `0 */6 * * *` — refreshes every ICS subscription and asks the app to run housekeeping (`POST /api/internal/prune`: old daily photos, expired sessions, Claude usage rows); needs `APP_URL` and `CRON_SECRET`.
    - `pnpm cron:daily-photo` on `35 23 * * *` — asks the app (`POST /api/internal/daily-photo`) to pre-pick tomorrow's photo; needs `APP_URL` and `CRON_SECRET`.
 7. Add the **backup** service (click-by-click walkthrough of this and the other post-merge steps: [`docs/railway-setup-after-merge.md`](docs/railway-setup-after-merge.md)): a fourth cron built from `backup/Dockerfile` that dumps Postgres and the uploads volume to an off-site bucket every night. Setup and restore steps are in [`backup/README.md`](backup/README.md). Do this before you trust the app with anything you would miss.
 8. Update your Azure app's redirect URIs + `NEXT_PUBLIC_APP_URL` to the Railway subdomain.

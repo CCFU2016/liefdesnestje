@@ -11,14 +11,32 @@ async function main() {
   const result = await refreshStaleIcs(4 * 60 * 60 * 1000);
   console.log(`ICS refresh: ${result.refreshed} ok, ${result.failed} failed`);
 
-  // Piggy-back housekeeping on this cron: old daily photos + their files,
-  // expired sessions, stale Claude usage rows. Never fails the refresh.
+  // Piggy-back housekeeping on this cron, but run it *inside the app*
+  // (POST /api/internal/prune): the daily-photo files live on the app's
+  // volume, and a cron service has its own empty one, so unlinking here
+  // would remove the database rows and leave every file behind.
+  // Needs APP_URL + CRON_SECRET on this service; skipped with a warning
+  // otherwise. Never fails the refresh.
+  const appUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  const secret = process.env.CRON_SECRET;
+  if (!appUrl || !secret) {
+    console.warn("Prune skipped: APP_URL and CRON_SECRET must be set on this service");
+    return;
+  }
   try {
-    const { pruneOldData } = await import("../src/lib/maintenance/prune");
-    const p = await pruneOldData();
+    const res = await fetch(new URL("/api/internal/prune", appUrl), {
+      method: "POST",
+      headers: { authorization: `Bearer ${secret}` },
+      signal: AbortSignal.timeout(3 * 60 * 1000),
+    });
+    const p = (await res.json().catch(() => ({}))) as {
+      photosDeleted?: number; photoFilesDeleted?: number; sessionsDeleted?: number;
+      tokensDeleted?: number; usageRowsDeleted?: number; errors?: string[]; error?: string;
+    };
+    if (!res.ok && res.status !== 207) throw new Error(`app returned ${res.status}: ${p.error ?? "unknown"}`);
     console.log(
-      `Prune: ${p.photosDeleted} photos (${p.photoFilesDeleted} files), ${p.sessionsDeleted} sessions, ${p.tokensDeleted} tokens, ${p.usageRowsDeleted} usage rows` +
-        (p.errors.length ? `; errors: ${p.errors.join(" | ")}` : "")
+      `Prune: ${p.photosDeleted ?? 0} photos (${p.photoFilesDeleted ?? 0} files), ${p.sessionsDeleted ?? 0} sessions, ${p.tokensDeleted ?? 0} tokens, ${p.usageRowsDeleted ?? 0} usage rows` +
+        (p.errors?.length ? `; errors: ${p.errors.join(" | ")}` : "")
     );
   } catch (e) {
     console.error("Prune failed:", e instanceof Error ? e.message : e);
