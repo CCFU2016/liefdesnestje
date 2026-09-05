@@ -388,7 +388,7 @@ function SortableTodo({
     <li
       ref={setNodeRef}
       style={style}
-      className="flex items-start gap-3 py-1.5 px-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-900 group"
+      className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-900 group"
       {...attributes}
       {...listeners}
     >
@@ -398,26 +398,31 @@ function SortableTodo({
         onChange={onToggle}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
-        className="mt-1"
       />
-      <div className="flex-1 min-w-0">
-        <div className={`text-sm ${todo.completedAt ? "line-through text-zinc-400" : ""}`}>
+      {/* Title and details share one line; the details slide underneath
+          only when the title really needs the width (narrow phones). */}
+      <div className="flex flex-1 min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <div
+          className={`min-w-[10rem] flex-1 text-sm ${todo.completedAt ? "line-through text-zinc-400" : ""}`}
+        >
           {todo.title}
           {todo.visibility === "private" && (
             <span className="ml-2 text-xs text-zinc-500">· private</span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500 mt-0.5">
-          {todo.dueAt && <span>due {format(new Date(todo.dueAt), "d MMM HH:mm")}</span>}
-          {todo.recurrenceRule && <span>· {describeRRule(todo.recurrenceRule)}</span>}
-          {assignee && (
-            <span className="flex items-center gap-1">
-              · <span className="inline-block h-2 w-2 rounded-full" style={{ background: assignee.color }} />
-              {assignee.displayName}
-            </span>
-          )}
-          {!isMine && <span className="text-[10px] uppercase tracking-wider">shared</span>}
-        </div>
+        {(todo.dueAt || todo.recurrenceRule || assignee || !isMine) && (
+          <div className="ml-auto flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-zinc-500">
+            {todo.dueAt && <span>due {format(new Date(todo.dueAt), "d MMM HH:mm")}</span>}
+            {todo.recurrenceRule && <span>{describeRRule(todo.recurrenceRule)}</span>}
+            {assignee && (
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: assignee.color }} />
+                {assignee.displayName}
+              </span>
+            )}
+            {!isMine && <span className="text-[10px] uppercase tracking-wider">shared</span>}
+          </div>
+        )}
       </div>
       <button
         onClick={(e) => {
