@@ -4,18 +4,19 @@ import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 import { createEvent as msCreateEvent } from "@/lib/microsoft/graph";
 import { createEvent as gcalCreateEvent } from "@/lib/google/api";
 
 const createSchema = z.object({
   calendarId: z.string().uuid(),
   title: z.string().min(1).max(300),
-  description: z.string().optional(),
+  description: z.string().max(20_000).optional(),
   startsAt: z.string().datetime(),
   endsAt: z.string().datetime(),
   allDay: z.boolean().optional(),
-  location: z.string().optional(),
-  timezone: z.string().optional(),
+  location: z.string().max(500).optional(),
+  timezone: z.string().max(64).optional(),
   visibility: z.enum(["private", "shared"]).optional(),
 });
 
@@ -61,6 +62,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

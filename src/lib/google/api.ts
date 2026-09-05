@@ -5,6 +5,9 @@ import { decrypt, encrypt } from "@/lib/auth/encryption";
 import { refreshTokens } from "./oauth";
 
 const BASE = "https://www.googleapis.com/calendar/v3";
+const FETCH_TIMEOUT_MS = 30_000;
+/** Full (non-incremental) pulls only look this far back, to bound work. */
+export const FULL_PULL_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Returns a valid access token, refreshing if needed. */
 export async function getAccessToken(accountId: string): Promise<string> {
@@ -50,6 +53,8 @@ export async function googleFetch<T>(
   const url = pathOrUrl.startsWith("http") ? pathOrUrl : `${BASE}${pathOrUrl}`;
   const res = await fetch(url, {
     ...init,
+    // A hung request would otherwise pin the per-calendar sync lock forever.
+    signal: init.signal ?? AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
@@ -100,6 +105,7 @@ export async function getMe(accountId: string): Promise<{ email: string }> {
   const token = await getAccessToken(accountId);
   const res = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!res.ok) throw new GoogleApiError(res.status, await res.text(), "userinfo");
   return (await res.json()) as { email: string };
@@ -127,6 +133,12 @@ export type ListEventsResult = {
   events: GcalEvent[];
   nextSyncToken: string | null;
   syncTokenInvalidated: boolean;
+  /**
+   * Start of the window a full (no-syncToken) pull covered; null for an
+   * incremental pull. The caller uses it to tombstone local rows the full
+   * pull didn't return.
+   */
+  windowStart: Date | null;
 };
 
 /**
@@ -143,21 +155,19 @@ export async function listEventsDelta(
   let pageToken: string | undefined;
   let nextSyncToken: string | null = null;
   let syncTokenInvalidated = false;
+  // Full pull: bounded lookback, no upper bound. Both pulls ask for tombstones
+  // — on a full pull that's how cancelled events reach us as status
+  // "cancelled" instead of silently vanishing (Google keeps them for a while).
+  const windowStart = syncToken ? null : new Date(Date.now() - FULL_PULL_LOOKBACK_MS);
 
   while (true) {
     const qs = new URLSearchParams();
     qs.set("maxResults", "250");
     qs.set("singleEvents", "true");
+    qs.set("showDeleted", "true");
     if (pageToken) qs.set("pageToken", pageToken);
     if (syncToken && !pageToken) qs.set("syncToken", syncToken);
-    if (!syncToken && !pageToken) {
-      // initial pull: limit to ~1 year back to bound work
-      const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      qs.set("timeMin", from);
-      qs.set("showDeleted", "false");
-    } else {
-      qs.set("showDeleted", "true"); // delta should include tombstones
-    }
+    if (windowStart && !pageToken) qs.set("timeMin", windowStart.toISOString());
 
     try {
       const page: {
@@ -179,13 +189,13 @@ export async function listEventsDelta(
       if (e instanceof GoogleApiError && e.status === 410) {
         // syncToken invalidated — caller should drop it and do a full pull
         syncTokenInvalidated = true;
-        return { events: [], nextSyncToken: null, syncTokenInvalidated: true };
+        return { events: [], nextSyncToken: null, syncTokenInvalidated: true, windowStart: null };
       }
       throw e;
     }
   }
 
-  return { events: all, nextSyncToken, syncTokenInvalidated };
+  return { events: all, nextSyncToken, syncTokenInvalidated, windowStart };
 }
 
 export async function createEvent(

@@ -68,8 +68,10 @@ export async function GET() {
         ownerUserId: account.userId,
         ownerIsMe: account.userId === ctx.userId,
         ownerDisplayName: member?.displayName ?? "Partner",
-        lastSyncedAt: null,
-        lastError: null,
+        // Google/Microsoft sync now records these too, so Settings can show
+        // a broken calendar instead of a silently frozen one.
+        lastSyncedAt: c.lastSyncedAt,
+        lastError: c.lastError,
         icsUrl: null,
         writable: account.userId === ctx.userId,
       };

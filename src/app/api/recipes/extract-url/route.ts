@@ -8,11 +8,13 @@ import {
 } from "@/lib/claude";
 import { downloadAndSaveImage } from "@/lib/uploads";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { httpUrl } from "@/lib/validation";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
 const bodySchema = z.union([
-  z.object({ url: z.string().url() }),
+  z.object({ url: httpUrl }),
   z.object({ rawText: z.string().min(20).max(20000) }), // fallback path — user pasted text
 ]);
 
@@ -21,6 +23,8 @@ const MAX_HTML_BYTES = 2 * 1024 * 1024; // 2MB
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
@@ -91,19 +95,15 @@ export async function POST(req: Request) {
 
 async function fetchBoundedHtml(url: string): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-    const res = await safeFetch(
-      url,
-      {
-        signal: controller.signal,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Liefdesnestje/1.0; +https://github.com/CCFU2016/liefdesnestje)",
-          Accept: "text/html,application/xhtml+xml",
-        },
-      }
-    );
-    clearTimeout(timeout);
+    // One deadline for headers *and* body — a slow-drip body used to hang
+    // here indefinitely once the timer was cleared after the headers.
+    const res = await safeFetch(url, {
+      signal: AbortSignal.timeout(20_000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Liefdesnestje/1.0; +https://github.com/CCFU2016/liefdesnestje)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
     if (!res.ok) return null;
     // Bound the response size.
     const reader = res.body?.getReader();

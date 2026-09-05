@@ -1,5 +1,5 @@
 import "server-only";
-import { safeFetch } from "@/lib/safe-fetch";
+import { readBodyCapped, safeFetch } from "@/lib/safe-fetch";
 
 // Apple's iCloud "Shared Albums" feature exposes a public JSON feed per share
 // token. The same endpoints Apple's own web viewer (share.icloud.com) uses,
@@ -93,22 +93,34 @@ const ICLOUD_TIMEOUT_MS = 12_000;
 // to wait.
 const WEBSTREAM_TIMEOUT_MS = 120_000;
 
+// Response-size caps. Small JSON exchanges (redirect bounce, webasseturls)
+// are a few KB; the full webstream listing of a 1000-photo album with all
+// its derivatives is ~1-2 MB, so give that one more headroom.
+const MAX_JSON_BYTES = 2 * 1024 * 1024;
+const MAX_WEBSTREAM_BYTES = 8 * 1024 * 1024;
+const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+
 async function postJson(
   url: string,
   body: Record<string, unknown>,
-  timeoutMs: number = ICLOUD_TIMEOUT_MS
+  timeoutMs: number = ICLOUD_TIMEOUT_MS,
+  maxBytes: number = MAX_JSON_BYTES
 ): Promise<{ status: number; body: unknown; headers: Headers }> {
-  const res = await safeFetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": DEFAULT_USER_AGENT,
-      Accept: "application/json",
+  const res = await safeFetch(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": DEFAULT_USER_AGENT,
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
     },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const text = await res.text();
+    { maxBytes }
+  );
+  const text = new TextDecoder().decode(await readBodyCapped(res, maxBytes));
   let parsed: unknown = null;
   try {
     parsed = text ? JSON.parse(text) : null;
@@ -141,7 +153,8 @@ export async function resolveBaseUrl(token: string): Promise<string> {
     const { status, body, headers } = await postJson(
       `${base}webstream`,
       { streamCtag: null },
-      WEBSTREAM_TIMEOUT_MS
+      WEBSTREAM_TIMEOUT_MS,
+      MAX_WEBSTREAM_BYTES
     );
     if (status === 200) return { ok: true, base };
     if (status === 330) {
@@ -149,6 +162,11 @@ export async function resolveBaseUrl(token: string): Promise<string> {
         ((body as { "X-Apple-MMe-Host"?: string } | null)?.["X-Apple-MMe-Host"]) ??
         headers.get("x-apple-mme-host");
       if (redirectHost) {
+        // The host comes from the response body — only ever follow it to
+        // Apple's own domain, so a tampered reply can't point us elsewhere.
+        if (!/^[a-z0-9.-]+\.icloud\.com$/i.test(redirectHost)) {
+          throw new ICloudAlbumError(`iCloud redirected to unexpected host "${redirectHost}"`);
+        }
         return { ok: false, next: `https://${redirectHost}/${token}/sharedstreams/` };
       }
     }
@@ -178,10 +196,20 @@ export async function fetchWebstream(baseUrl: string): Promise<WebstreamResponse
   // Retry once on timeout — big albums are slow AND occasionally flaky.
   let res: Awaited<ReturnType<typeof postJson>>;
   try {
-    res = await postJson(`${baseUrl}webstream`, { streamCtag: null }, WEBSTREAM_TIMEOUT_MS);
+    res = await postJson(
+      `${baseUrl}webstream`,
+      { streamCtag: null },
+      WEBSTREAM_TIMEOUT_MS,
+      MAX_WEBSTREAM_BYTES
+    );
   } catch (e) {
     if (e instanceof Error && e.name === "TimeoutError") {
-      res = await postJson(`${baseUrl}webstream`, { streamCtag: null }, WEBSTREAM_TIMEOUT_MS);
+      res = await postJson(
+        `${baseUrl}webstream`,
+        { streamCtag: null },
+        WEBSTREAM_TIMEOUT_MS,
+        MAX_WEBSTREAM_BYTES
+      );
     } else {
       throw e;
     }
@@ -300,14 +328,18 @@ export function pickBestDerivative(photo: SharedPhoto): {
  * HEIC as JPEG in derivatives).
  */
 export async function downloadAsset(url: string): Promise<{ bytes: Uint8Array; mime: string }> {
-  const res = await safeFetch(url, {
-    headers: { "User-Agent": DEFAULT_USER_AGENT, Accept: "image/*" },
-    signal: AbortSignal.timeout(ICLOUD_TIMEOUT_MS * 2), // download may take longer
-  });
+  const res = await safeFetch(
+    url,
+    {
+      headers: { "User-Agent": DEFAULT_USER_AGENT, Accept: "image/*" },
+      signal: AbortSignal.timeout(ICLOUD_TIMEOUT_MS * 2), // download may take longer
+    },
+    { maxBytes: MAX_ASSET_BYTES }
+  );
   if (!res.ok) {
     throw new ICloudAlbumError(`asset download ${res.status}`);
   }
-  const buf = new Uint8Array(await res.arrayBuffer());
+  const buf = await readBodyCapped(res, MAX_ASSET_BYTES);
   const ctype = (res.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim();
   return { bytes: buf, mime: ctype || "image/jpeg" };
 }

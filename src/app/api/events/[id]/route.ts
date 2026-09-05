@@ -4,16 +4,17 @@ import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 import { deleteEvent as msDeleteEvent, updateEvent as msUpdateEvent } from "@/lib/microsoft/graph";
 import { deleteEvent as gcalDeleteEvent, updateEvent as gcalUpdateEvent } from "@/lib/google/api";
 
 const patchSchema = z.object({
   title: z.string().min(1).max(300).optional(),
-  description: z.string().nullable().optional(),
+  description: z.string().max(20_000).nullable().optional(),
   startsAt: z.string().datetime().optional(),
   endsAt: z.string().datetime().optional(),
   allDay: z.boolean().optional(),
-  location: z.string().nullable().optional(),
+  location: z.string().max(500).nullable().optional(),
   visibility: z.enum(["private", "shared"]).optional(),
 });
 
@@ -33,6 +34,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const ctx = await requireHouseholdMember();
     const { id } = await params;
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = patchSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 

@@ -5,8 +5,9 @@ import { db } from "@/lib/db";
 import { holidays } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, isVisibleTo } from "@/lib/auth/household";
-import { DOC_MIME_TYPES, MAX_DOC_BYTES, UPLOAD_ROOT, saveUpload } from "@/lib/uploads";
+import { DOC_MIME_TYPES, MAX_DOC_BYTES, UPLOAD_ROOT, extForMime, saveUpload } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
+import { MULTIPART_OVERHEAD_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
@@ -26,6 +27,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (h.authorId !== ctx.userId) {
       return NextResponse.json({ error: "Only the author can upload." }, { status: 403 });
     }
+    const tooBig = rejectIfTooLarge(req, MAX_DOC_BYTES + MULTIPART_OVERHEAD_BYTES);
+    if (tooBig) return tooBig;
 
     const form = await req.formData();
     const file = form.get("file");
@@ -51,15 +54,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         { status: 400 }
       );
     }
-    const safeName = file.name.replace(/[/\\..]/g, "_").slice(0, 120) || `document`;
-    await saveUpload({
+    // Keep the original name (and its extension, so the browser opens it
+    // inline) but strip anything path-like. The old `[/\\..]` character
+    // class matched every "." — that is how "x.pdf" used to become "x_pdf".
+    const safeName =
+      (file.name || "")
+        .replace(/[/\\]/g, "_")
+        .replace(/\.\.+/g, "_")
+        .replace(/[\0-\x1f"]/g, "_")
+        .trim()
+        .slice(0, 120) || `document.${extForMime(sniffed)}`;
+    const { fileName } = await saveUpload({
       subdir: `holidays/${id}`,
       filename: safeName,
       bytes,
       mime: sniffed,
     });
 
-    const docUrl = `/api/holidays/${id}/document?name=${encodeURIComponent(safeName)}`;
+    const docUrl = `/api/holidays/${id}/document?name=${encodeURIComponent(fileName)}`;
     await db.update(holidays).set({ documentUrl: docUrl, updatedAt: new Date() }).where(eq(holidays.id, id));
     return NextResponse.json({ documentUrl: docUrl });
   } catch (e) {
@@ -98,7 +110,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       headers: {
         "content-type": mime,
         "cache-control": "private, max-age=300",
-        "content-disposition": `inline; filename="${rel}"`,
+        // Files stored before the sanitiser fix can carry quotes/CR/LF —
+        // never let those into a header. filename* carries the exact name.
+        "content-disposition": `inline; filename="${rel.replace(/["\r\n]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(rel)}`,
       },
     });
   } catch (e) {

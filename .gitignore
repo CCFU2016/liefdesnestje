@@ -46,6 +46,9 @@ yarn-error.log*
 # local screenshots / reference shots
 /input
 
+# Claude Code worktrees (each carries its own node_modules symlink, .env copy and .next)
+/.claude/worktrees
+
 # playwright
 /test-results
 /playwright-report

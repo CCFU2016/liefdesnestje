@@ -1,3 +1,5 @@
+> Historical onboarding notes from the first deploy. The README is the maintained reference; see its Runbook section for day-to-day operations.
+
 # Liefdesnestje — what to do next
 
 The app is running at **http://localhost:3000** right now. You can sign in as Niki or Partner (dev-mode buttons) and click through Today / Calendar / To-dos / Notes / Settings. Data persists in `./.local-db` (pglite, a little Postgres that runs in-process).

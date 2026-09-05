@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { readBodyCapped, safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { sniffMime } from "@/lib/file-magic";
 
 export const UPLOAD_ROOT = process.env.UPLOAD_DIR ?? (process.env.NODE_ENV === "production" ? "/data/uploads" : "./.local-uploads");
 
@@ -70,43 +71,34 @@ export async function downloadAndSaveImage(
   subdir = "recipes"
 ): Promise<string | null> {
   try {
-    const res = await safeFetch(remoteUrl, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
-        Accept: "image/*",
+    const res = await safeFetch(
+      remoteUrl,
+      {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Liefdesnestje/1.0",
+          Accept: "image/*",
+        },
       },
-    });
+      { maxBytes: MAX_IMAGE_BYTES }
+    );
     if (!res.ok) return null;
 
     const ctypeRaw = res.headers.get("content-type") ?? "";
-    const mime = ctypeRaw.split(";")[0].trim().toLowerCase();
-    if (!IMAGE_MIME_TYPES.includes(mime as ImageMime)) return null;
+    const claimed = ctypeRaw.split(";")[0].trim().toLowerCase();
+    if (!IMAGE_MIME_TYPES.includes(claimed as ImageMime)) return null;
 
-    const reader = res.body?.getReader();
-    if (!reader) return null;
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.length;
-        if (total > MAX_IMAGE_BYTES) {
-          await reader.cancel();
-          return null;
-        }
-        chunks.push(value);
-      }
-    }
-    if (total === 0) return null;
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const c of chunks) {
-      bytes.set(c, offset);
-      offset += c.length;
-    }
+    // Throws BodyTooLargeError (a SafeFetchError) past the cap → null below.
+    const bytes = await readBodyCapped(res, MAX_IMAGE_BYTES);
+    if (bytes.length === 0) return null;
+
+    // The remote Content-Type is only a hint; the extension we write (and
+    // later serve with) must come from what the bytes actually are, or an
+    // HTML/SVG payload could land on disk as ".jpg".
+    const sniffed = sniffMime(bytes);
+    if (!sniffed || !IMAGE_MIME_TYPES.includes(sniffed as ImageMime)) return null;
+    const mime = sniffed as ImageMime;
 
     const { relPath } = await saveUpload({ subdir, bytes, mime });
     // relPath is "<subdir>/<filename>" — the serve route is

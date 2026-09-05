@@ -49,6 +49,46 @@ export class SafeFetchError extends Error {
   }
 }
 
+// Thrown when a response body grows past the cap the caller set — either
+// up front via Content-Length or while streaming in readBodyCapped.
+export class BodyTooLargeError extends SafeFetchError {
+  constructor(maxBytes: number) {
+    super(`Response body exceeds ${maxBytes} bytes`);
+    this.name = "BodyTooLargeError";
+  }
+}
+
+/**
+ * Read a response body fully, but never buffer more than `maxBytes`. Cancels
+ * the stream and throws BodyTooLargeError when exceeded, so a hostile or
+ * misconfigured origin can't balloon memory (Content-Length is advisory —
+ * chunked responses carry none, and a server may lie).
+ */
+export async function readBodyCapped(res: Response, maxBytes: number): Promise<Uint8Array> {
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.length;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new BodyTooLargeError(maxBytes);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
 function assertPublicIp(ip: string) {
   const v = net.isIP(ip);
   if (v === 4) {
@@ -101,13 +141,17 @@ async function assertSafeHost(url: URL) {
 /**
  * SSRF-safe wrapper around fetch. Blocks private/loopback/link-local IPs,
  * non-http(s) schemes, and re-checks on every redirect hop.
+ *
+ * `maxBytes` rejects early on a declared Content-Length over the cap; pair
+ * it with readBodyCapped() to bound the actual stream too.
  */
 export async function safeFetch(
   url: string | URL,
   init: RequestInit = {},
-  options: { maxRedirects?: number } = {}
+  options: { maxRedirects?: number; maxBytes?: number } = {}
 ): Promise<Response> {
   const maxRedirects = options.maxRedirects ?? 5;
+  const maxBytes = options.maxBytes;
   let current = typeof url === "string" ? url : url.toString();
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
@@ -125,6 +169,13 @@ export async function safeFetch(
       // Drain the response body so fetch frees the socket
       await res.arrayBuffer().catch(() => undefined);
       continue;
+    }
+    if (maxBytes != null) {
+      const declared = Number(res.headers.get("content-length") ?? "");
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new BodyTooLargeError(maxBytes);
+      }
     }
     return res;
   }

@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { signOutAction } from "@/app/(app)/actions";
+import { SignOutForm } from "@/components/shell/sign-out-form";
 
 export function Header({ unreadCount = 0 }: { unreadCount?: number }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -30,20 +30,17 @@ export function Header({ unreadCount = 0 }: { unreadCount?: number }) {
           <span className="absolute right-1 top-1 inline-flex h-2 w-2 rounded-full bg-red-500" />
         )}
       </Link>
-      <form action={signOutAction}>
+      <SignOutForm>
         <Button
           type="submit"
           variant="ghost"
           size="icon"
           aria-label="Sign out"
           title="Sign out"
-          onClick={(e) => {
-            if (!confirm("Sign out?")) e.preventDefault();
-          }}
         >
           <LogOut className="h-4 w-4" />
         </Button>
-      </form>
+      </SignOutForm>
     </header>
   );
 }

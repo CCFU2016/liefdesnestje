@@ -154,6 +154,10 @@ export const calendars = pgTable(
     syncEnabled: boolean("sync_enabled").notNull().default(true),
     showOnToday: boolean("show_on_today").notNull().default(true),
     deltaLink: text("delta_link"), // Microsoft Graph delta token
+    // End of the calendarView window the Microsoft deltaLink was minted for.
+    // The link permanently encodes that window, so we re-request a fresh one
+    // before the window runs out (see microsoft/sync-helpers.ts).
+    deltaWindowEnd: timestamp("delta_window_end", { withTimezone: true }),
     syncToken: text("sync_token"), // Google Calendar sync token
     subscriptionId: text("subscription_id"), // webhook subscription / channel id
     subscriptionResourceId: text("subscription_resource_id"), // Google: needed to stop a channel

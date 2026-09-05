@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { calendars, events, externalCalendarAccounts } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   listCalendars,
   listEventsDelta,
@@ -11,6 +11,8 @@ import {
 } from "./api";
 import { requireEnv } from "@/lib/env";
 import { randomToken } from "@/lib/utils";
+import { staleLocalEventIds } from "@/lib/calendar-sync/helpers";
+import { withCalendarSyncLock } from "@/lib/calendar-sync/lock";
 
 export async function syncCalendarList(accountId: string): Promise<string[]> {
   const items = await listCalendars(accountId);
@@ -38,7 +40,25 @@ export async function syncCalendarList(accountId: string): Promise<string[]> {
   return newIds;
 }
 
+/**
+ * Pull (delta) events for one calendar and upsert them locally. Records the
+ * outcome on the calendar row (lastSyncedAt / lastError) so Settings can
+ * surface failures, and rethrows so callers can still log. Skips (returning
+ * zeros) if another sync for the same calendar is already running.
+ */
 export async function syncCalendarEvents(
+  accountId: string,
+  localCalendarId: string,
+  householdId: string,
+  authorId: string
+): Promise<{ upserted: number; removed: number }> {
+  const result = await withCalendarSyncLock(localCalendarId, "google", () =>
+    syncCalendarEventsLocked(accountId, localCalendarId, householdId, authorId)
+  );
+  return result ?? { upserted: 0, removed: 0 };
+}
+
+async function syncCalendarEventsLocked(
   accountId: string,
   localCalendarId: string,
   householdId: string,
@@ -47,40 +67,64 @@ export async function syncCalendarEvents(
   const cal = (await db.select().from(calendars).where(eq(calendars.id, localCalendarId)).limit(1))[0];
   if (!cal) throw new Error("Calendar not found");
 
-  let result = await listEventsDelta(accountId, cal.externalId, cal.syncToken ?? null);
+  try {
+    let result = await listEventsDelta(accountId, cal.externalId, cal.syncToken ?? null);
 
-  // If the stored syncToken was invalidated, retry with no token (full pull)
-  if (result.syncTokenInvalidated) {
-    await db.update(calendars).set({ syncToken: null }).where(eq(calendars.id, localCalendarId));
-    result = await listEventsDelta(accountId, cal.externalId, null);
-  }
-
-  let upserted = 0;
-  let removed = 0;
-  for (const e of result.events) {
-    if (e.status === "cancelled") {
-      await db
-        .update(events)
-        .set({ deletedAt: new Date() })
-        .where(and(eq(events.calendarId, localCalendarId), eq(events.externalId, e.id)));
-      removed++;
-      continue;
+    // If the stored syncToken was invalidated, retry with no token (full pull)
+    if (result.syncTokenInvalidated) {
+      await db.update(calendars).set({ syncToken: null }).where(eq(calendars.id, localCalendarId));
+      result = await listEventsDelta(accountId, cal.externalId, null);
     }
-    const mapped = mapGcalToLocal(e);
-    if (!mapped) continue;
 
-    const existing = (
-      await db
-        .select()
-        .from(events)
-        .where(and(eq(events.calendarId, localCalendarId), eq(events.externalId, e.id)))
-        .limit(1)
-    )[0];
+    let upserted = 0;
+    let removed = 0;
+    const seen = new Set<string>();
+    for (const e of result.events) {
+      if (e.status === "cancelled") {
+        await db
+          .update(events)
+          .set({ deletedAt: new Date() })
+          .where(and(eq(events.calendarId, localCalendarId), eq(events.externalId, e.id)));
+        removed++;
+        continue;
+      }
+      const mapped = mapGcalToLocal(e);
+      if (!mapped) continue;
+      seen.add(e.id);
 
-    if (existing) {
-      await db
-        .update(events)
-        .set({
+      // Upsert key is (calendarId, externalId) — a full re-pull therefore
+      // updates existing rows in place and can't duplicate them.
+      const existing = (
+        await db
+          .select()
+          .from(events)
+          .where(and(eq(events.calendarId, localCalendarId), eq(events.externalId, e.id)))
+          .limit(1)
+      )[0];
+
+      if (existing) {
+        await db
+          .update(events)
+          .set({
+            title: mapped.title,
+            description: mapped.description,
+            startsAt: mapped.startsAt,
+            endsAt: mapped.endsAt,
+            allDay: mapped.allDay,
+            location: mapped.location,
+            timezone: mapped.timezone,
+            organizerName: mapped.organizerName,
+            organizerEmail: mapped.organizerEmail,
+            etag: e.etag ?? null,
+            updatedAt: new Date(),
+            deletedAt: null,
+          })
+          .where(eq(events.id, existing.id));
+      } else {
+        await db.insert(events).values({
+          householdId,
+          calendarId: localCalendarId,
+          authorId,
           title: mapped.title,
           description: mapped.description,
           startsAt: mapped.startsAt,
@@ -90,41 +134,48 @@ export async function syncCalendarEvents(
           timezone: mapped.timezone,
           organizerName: mapped.organizerName,
           organizerEmail: mapped.organizerEmail,
+          externalId: e.id,
           etag: e.etag ?? null,
-          updatedAt: new Date(),
-          deletedAt: null,
-        })
-        .where(eq(events.id, existing.id));
-    } else {
-      await db.insert(events).values({
-        householdId,
-        calendarId: localCalendarId,
-        authorId,
-        title: mapped.title,
-        description: mapped.description,
-        startsAt: mapped.startsAt,
-        endsAt: mapped.endsAt,
-        allDay: mapped.allDay,
-        location: mapped.location,
-        timezone: mapped.timezone,
-        organizerName: mapped.organizerName,
-        organizerEmail: mapped.organizerEmail,
-        externalId: e.id,
-        etag: e.etag ?? null,
-        visibility: "shared",
-      });
+          visibility: "shared",
+        });
+      }
+      upserted++;
     }
-    upserted++;
-  }
 
-  if (result.nextSyncToken) {
+    if (result.windowStart) {
+      // Full (non-incremental) pull: local rows from the pulled window that
+      // Google didn't return were deleted upstream while we had no valid
+      // syncToken — tombstone them, like ics/sync.ts does.
+      const existing = await db
+        .select({ id: events.id, externalId: events.externalId, startsAt: events.startsAt })
+        .from(events)
+        .where(and(eq(events.calendarId, localCalendarId), isNull(events.deletedAt)));
+      const stale = staleLocalEventIds(existing, seen, { start: result.windowStart });
+      if (stale.length > 0) {
+        await db.update(events).set({ deletedAt: new Date() }).where(inArray(events.id, stale));
+        removed += stale.length;
+      }
+    }
+
     await db
       .update(calendars)
-      .set({ syncToken: result.nextSyncToken, updatedAt: new Date() })
+      .set({
+        ...(result.nextSyncToken ? { syncToken: result.nextSyncToken } : {}),
+        lastSyncedAt: new Date(),
+        lastError: null,
+        updatedAt: new Date(),
+      })
       .where(eq(calendars.id, localCalendarId));
-  }
 
-  return { upserted, removed };
+    return { upserted, removed };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await db
+      .update(calendars)
+      .set({ lastError: msg, lastSyncedAt: new Date(), updatedAt: new Date() })
+      .where(eq(calendars.id, localCalendarId));
+    throw e;
+  }
 }
 
 function mapGcalToLocal(e: GcalEvent) {

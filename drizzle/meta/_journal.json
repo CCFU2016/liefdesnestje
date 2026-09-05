@@ -183,6 +183,13 @@
       "when": 1788292696719,
       "tag": "0025_travel_timezones",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788514645172,
+      "tag": "0026_delta_window_end",
+      "breakpoints": true
     }
   ]
 }

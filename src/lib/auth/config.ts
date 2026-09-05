@@ -9,7 +9,8 @@ import {
   verificationTokens,
   householdMembers,
 } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { isSignInAllowed, normaliseEmail, parseAllowlist } from "./allowlist";
 
 declare module "next-auth" {
   interface Session {
@@ -52,6 +53,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    // Gate who may create an account. Any Google account can complete the
+    // OAuth dance; without this, strangers could sign up and spend the
+    // Claude budget / fill the uploads volume. See ./allowlist.ts for the
+    // rules. Returning false sends the browser to pages.error (/signin).
+    async signIn({ user, profile }) {
+      const email = normaliseEmail(user.email ?? (profile?.email as string | undefined));
+      if (!email) {
+        console.warn("[auth] sign-in denied: provider returned no email");
+        return false;
+      }
+      try {
+        const [existing, [{ n }]] = await Promise.all([
+          db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1),
+          db.select({ n: sql<number>`count(*)::int` }).from(users),
+        ]);
+        const allowed = isSignInAllowed({
+          email,
+          allowlist: parseAllowlist(process.env.ALLOWED_EMAILS),
+          userExists: existing.length > 0,
+          anyUsers: n > 0,
+        });
+        if (!allowed) console.warn("[auth] sign-in denied: address not allowlisted");
+        return allowed;
+      } catch (e) {
+        // Fail closed: if we cannot check, do not let a new account in.
+        console.error("[auth] signIn callback: allowlist lookup failed", e);
+        return false;
+      }
+    },
     async session({ session, user }) {
       session.user.id = user.id;
       // Don't 500 the whole sign-in flow if the membership lookup fails —

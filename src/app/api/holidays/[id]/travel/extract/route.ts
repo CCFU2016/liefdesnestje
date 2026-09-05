@@ -10,6 +10,7 @@ import {
 } from "@/lib/claude";
 import { MAX_DOC_BYTES, saveUpload } from "@/lib/uploads";
 import { sniffMime } from "@/lib/file-magic";
+import { MULTIPART_OVERHEAD_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 export const maxDuration = 60;
 
@@ -36,6 +37,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     const h = await loadForCaller(id, ctx);
     if (!h) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const tooBig = rejectIfTooLarge(req, MAX_DOC_BYTES + MULTIPART_OVERHEAD_BYTES);
+    if (tooBig) return tooBig;
 
     const form = await req.formData();
     const file = form.get("file");

@@ -3,13 +3,16 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../src/lib/db/schema";
-import { renewSubscription as msRenew } from "../src/lib/microsoft/graph";
+import { GraphError, renewSubscription as msRenew } from "../src/lib/microsoft/graph";
+import { subscribeCalendar as msSubscribe } from "../src/lib/microsoft/sync";
 import { subscribeCalendar as googleSubscribe } from "../src/lib/google/sync";
 
 // Renew provider subscriptions that expire within 24 hours.
 // - Microsoft Graph: PATCH the subscription with a new expirationDateTime (max ~70h).
+//   If Graph has already dropped it (404 — e.g. it expired before a missed cron
+//   run), create a fresh one instead; subscribeCalendar stores the new id/expiry.
 // - Google Calendar: channels can't be extended; stop + create new (subscribeCalendar
-//   handles the stop internally).
+//   handles the stop internally, best-effort, so an already-gone channel is fine).
 //
 // Run on a cron (Railway Cron service: `0 */6 * * *`).
 
@@ -44,14 +47,20 @@ async function main() {
     if (!cal.subscriptionId || !cal.accountId) continue;
     try {
       if (account.provider === "microsoft") {
-        const renewed = await msRenew(cal.accountId, cal.subscriptionId);
-        await db
-          .update(schema.calendars)
-          .set({
-            subscriptionExpiresAt: new Date(renewed.expirationDateTime),
-            updatedAt: new Date(),
-          })
-          .where(eq(schema.calendars.id, cal.id));
+        try {
+          const renewed = await msRenew(cal.accountId, cal.subscriptionId);
+          await db
+            .update(schema.calendars)
+            .set({
+              subscriptionExpiresAt: new Date(renewed.expirationDateTime),
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.calendars.id, cal.id));
+        } catch (e) {
+          if (!(e instanceof GraphError) || e.status !== 404) throw e;
+          console.warn(`  subscription ${cal.subscriptionId} gone (404), recreating for ${cal.name}`);
+          await msSubscribe(cal.accountId, cal.id);
+        }
       } else if (account.provider === "google") {
         // Google channels aren't renewable — create a fresh one. subscribeCalendar
         // stops the old channel first.

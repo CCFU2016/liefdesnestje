@@ -4,14 +4,15 @@ import { db } from "@/lib/db";
 import { todoLists, todos } from "@/lib/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireHouseholdMember, UnauthorizedError, visibleToFilter } from "@/lib/auth/household";
+import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
 
 const createSchema = z.object({
   listId: z.string().uuid(),
   title: z.string().min(1).max(500),
-  notes: z.string().optional(),
+  notes: z.string().max(20_000).optional(),
   dueAt: z.string().datetime().optional(),
   assigneeId: z.string().uuid().optional(),
-  recurrenceRule: z.string().optional(),
+  recurrenceRule: z.string().max(500).optional(),
   visibility: z.enum(["private", "shared"]).optional(),
 });
 
@@ -55,6 +56,8 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await requireHouseholdMember();
+    const tooBig = rejectIfTooLarge(req, MAX_JSON_BYTES);
+    if (tooBig) return tooBig;
     const body = createSchema.safeParse(await req.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
