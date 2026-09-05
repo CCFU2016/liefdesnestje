@@ -122,8 +122,8 @@ This is the important one. Right now the database and every uploaded file exist 
 
 ### 3c. Run it once by hand and check (5 min) — this is the part for you
 
-1. **Deployments** tab → three-dots menu on the latest deployment → **Redeploy**. A cron service runs its job when you redeploy it.
-2. Open **View logs**. A good run ends with:
+1. **Deployments** tab → three-dots menu on the latest deployment → **Redeploy** (see the note in step 2 on forcing an immediate run).
+2. Open **View logs**. (Note: for a cron service, *Redeploy* only re-schedules it. To force a run right now, temporarily clear the **Cron Schedule** in Settings, redeploy, then put the schedule back. The first run on 5 Sep was done this way.) A good run ends with:
 
    ```
    [backup] done:

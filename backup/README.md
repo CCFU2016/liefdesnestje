@@ -55,7 +55,7 @@ cron schedule `15 3 * * *` (03:15 UTC, after the photo prewarm). Variables:
 | `DAILY_KEEP_DAYS` | `7` |
 | `WEEKLY_KEEP_DAYS` | `28` |
 
-Run it by hand with *Redeploy* on its latest deployment; the log should end
+To force a run outside the schedule: clear the cron schedule in Settings, redeploy, restore the schedule (Redeploy alone only re-schedules). The log should end
 with `[backup] done:` and a listing of `daily/` (and `weekly/` on Sundays).
 Do a restore drill twice a year — a backup nobody has restored is a hope,
 not a backup.
