@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  CalendarRange,
   CheckSquare,
   Home,
-  UtensilsCrossed,
   Ellipsis,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ const items = [
   { href: "/today", label: "Today", icon: Home },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/todos", label: "To-dos", icon: CheckSquare },
-  { href: "/meals", label: "Meals", icon: UtensilsCrossed },
+  { href: "/events", label: "Events", icon: CalendarRange },
   { href: "/more", label: "More", icon: Ellipsis },
 ];
 
@@ -26,7 +26,7 @@ const items = [
 // without a lit tab.
 const morePrefixes = [
   "/more",
-  "/events",
+  "/meals",
   "/notes",
   "/bucket-list",
   "/places",

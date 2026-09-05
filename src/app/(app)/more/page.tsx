@@ -1,19 +1,19 @@
 import Link from "next/link";
 import {
   Bell,
-  CalendarRange,
   ChevronRight,
   MapPin,
   NotebookText,
   Settings as SettingsIcon,
   Sparkles,
+  UtensilsCrossed,
 } from "lucide-react";
 import { requireHouseholdMember } from "@/lib/auth/household";
 
 // The pages that do not fit in the phone's five-tab bar. On a wide screen the
 // sidebar lists them all, so this page only matters below the md breakpoint.
 const pages = [
-  { href: "/events", label: "Events", icon: CalendarRange },
+  { href: "/meals", label: "Meals", icon: UtensilsCrossed },
   { href: "/notes", label: "Notes", icon: NotebookText },
   { href: "/bucket-list", label: "Bucket list", icon: Sparkles },
   { href: "/places", label: "Travel map", icon: MapPin },
