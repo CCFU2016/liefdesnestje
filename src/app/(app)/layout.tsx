@@ -36,7 +36,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           color: member.color,
         }}
       />
-      <div className="flex flex-1 min-w-0 flex-col pb-16 md:pb-0">
+      {/* Bottom padding clears the phone tab bar: its 56px plus the home-indicator
+          inset it pads itself with. */}
+      <div className="flex flex-1 min-w-0 flex-col pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
         <Header unreadCount={unreadCount} />
         {/* min-w-0 lets flex children shrink below their natural width;
             individual pages / cards handle their own overflow so content
