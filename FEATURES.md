@@ -120,6 +120,10 @@ Settings gets an **Albert Heijn** card: one connection per nest, on one member's
 
 The feature the connection exists for: plan meals here, shop with the Appie app (aisle order, bonus). The Groceries to-do list gets a **Send N new to Albert Heijn** button, and the meal plan's "Generate shopping list" offers the same right after pushing. One batched Claude call turns each item into a Dutch search term and a pack count (a household that chose "AH Kipfilet" for "chicken breast" before skips Claude next time: `ah_product_matches`), AH product search supplies up to three candidates per item, and a review sheet shows thumbnail, size, price and bonus with swap, "just add as text" and a pack stepper, plus a footer estimate. Confirm sends everything to Mijn lijst in one call; sent to-dos get `ah_sent_at` so nothing goes twice, and the sheet offers to tick them off here too. AH down, not connected or needing renewal each get their own plain-language message; the Groceries list itself is never touched by a failure.
 
+## 24. Bonus tags
+
+Once an ingredient has been sent to Albert Heijn as a product, the app knows which AH product it is — so a recipe's ingredient list and the week's meal cards show a small orange **Bonus · 2e halve prijs** tag whenever that product is in bonus this week. One anonymous products-by-id call per distinct set of ingredients, cached six hours on the server and an hour in the browser; nothing is looked up for ingredients that were never matched, and if AH is unreachable the tags simply don't appear.
+
 ---
 
 *Dates aren't pinned here because the Git log has them, but all 20 shipped to production between V2 launch and now.*
