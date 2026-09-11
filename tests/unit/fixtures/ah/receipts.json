@@ -1,0 +1,23 @@
+{
+  "page": {
+    "posReceiptsPage": {
+      "posReceipts": [
+        { "id": "R-1", "dateTime": "2026-09-10T17:42:00", "totalAmount": { "amount": 43.21 } },
+        { "id": "R-2", "dateTime": "2026-09-07T12:05:00", "totalAmount": null }
+      ]
+    }
+  },
+  "details": {
+    "posReceiptDetails": {
+      "id": "R-1",
+      "total": { "amount": 43.21 },
+      "products": [
+        { "id": "12", "quantity": 2, "name": "AH KIPFILET", "price": { "amount": 7.35 }, "amount": { "amount": 14.7 } },
+        { "id": null, "quantity": 1, "name": "STATIEGELD", "price": null, "amount": { "amount": 0.25 } }
+      ],
+      "discounts": [{ "name": "BONUS", "amount": { "amount": -0.46 } }],
+      "payments": [{ "method": "PIN", "amount": { "amount": 43.21 } }]
+    }
+  },
+  "empty": { "posReceiptsPage": { "posReceipts": [] } }
+}

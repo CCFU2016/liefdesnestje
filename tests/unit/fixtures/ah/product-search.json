@@ -1,0 +1,42 @@
+{
+  "page": { "size": 2, "totalElements": 295, "totalPages": 148, "number": 0 },
+  "products": [
+    {
+      "webshopId": 123456,
+      "hqId": 1,
+      "title": "AH Kipfilet",
+      "brand": "AH",
+      "salesUnitSize": "2 stuks",
+      "currentPrice": 7.35,
+      "priceBeforeBonus": 7.58,
+      "isBonus": true,
+      "bonusMechanism": "3% volume voordeel",
+      "bonusStartDate": "2026-09-11",
+      "bonusEndDate": "2999-12-31",
+      "images": [
+        { "width": 800, "height": 800, "url": "https://static.ah.nl/dam/product/A_800" },
+        { "width": 400, "height": 400, "url": "https://static.ah.nl/dam/product/A_400" },
+        { "width": 200, "height": 200, "url": "https://static.ah.nl/dam/product/A_200" }
+      ],
+      "isOrderable": true,
+      "availableOnline": true,
+      "mainCategory": "Vleeswaren",
+      "nutriscore": "A",
+      "someFieldWeDoNotKnow": { "nested": true }
+    },
+    {
+      "webshopId": 654321,
+      "title": "AH Biologisch kipfilet",
+      "brand": "AH Biologisch",
+      "salesUnitSize": "300 g",
+      "priceBeforeBonus": 5.99,
+      "isBonus": false,
+      "bonusMechanism": null,
+      "images": [{ "width": 80, "height": 80, "url": "https://static.ah.nl/dam/product/B_80" }],
+      "isOrderable": false
+    },
+    { "title": "broken: no webshopId" }
+  ],
+  "filters": [],
+  "sortOn": "RELEVANCE"
+}

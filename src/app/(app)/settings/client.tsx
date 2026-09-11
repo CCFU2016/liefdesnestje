@@ -12,6 +12,7 @@ import { YouEditor } from "./components/you-editor";
 import { AccountRow, CalendarRow, IcsAdder } from "./components/calendars";
 import { PhotoAlbumEditor } from "./components/photo-album";
 import { LinkedAccountsEditor } from "./components/linked-accounts";
+import { AlbertHeijnCard } from "./components/albert-heijn";
 
 export function SettingsClient({
   household,
@@ -175,6 +176,15 @@ export function SettingsClient({
               </p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card id="albert-heijn">
+        <CardHeader>
+          <CardTitle>Albert Heijn</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AlbertHeijnCard />
         </CardContent>
       </Card>
 

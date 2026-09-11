@@ -1,0 +1,42 @@
+{
+  "id": 987,
+  "items": [
+    {
+      "listItemId": 1001,
+      "originCode": "PRD",
+      "position": 0,
+      "quantity": 2,
+      "sorting": { "position": 1 },
+      "strikedthrough": false,
+      "type": "SHOPPABLE",
+      "productDetails": {
+        "missingBonusOffersQuantity": 0,
+        "product": {
+          "webshopId": 123456,
+          "title": "AH Kipfilet",
+          "salesUnitSize": "2 stuks",
+          "currentPrice": 7.35,
+          "isBonus": true,
+          "bonusMechanism": "3% volume voordeel",
+          "images": [{ "width": 200, "height": 200, "url": "https://static.ah.nl/dam/product/A_200" }]
+        }
+      }
+    },
+    {
+      "listItemId": 1002,
+      "originCode": "TXT",
+      "position": 1,
+      "quantity": 1,
+      "sorting": { "position": 2 },
+      "strikedthrough": true,
+      "type": "SHOPPABLE",
+      "description": "verse basilicum",
+      "vagueTermDetails": null
+    },
+    { "originCode": "PRD", "note": "broken: no listItemId" }
+  ],
+  "dateLastSynced": "2026-09-11T10:00:00Z",
+  "dateLastSyncedMillis": 1788600000000,
+  "activeSorting": "STORE",
+  "storeNumber": 1234
+}

@@ -108,6 +108,10 @@ New `safeFetch` helper blocks private/loopback/link-local IPs (v4 and v6, includ
 
 The custom mobile 3-day grid was clamping out-of-range all-day events to the view edges, so events from previous weeks leaked into today's row. Added an explicit skip-if-outside-view check and day-diff column calculation so only events that overlap the viewed range show up.
 
+## 21. Albert Heijn connection
+
+Settings gets an **Albert Heijn** card: one connection per nest, on one member's AH account, tokens AES-GCM encrypted in `ah_connections`. Connecting is a paste-the-code step (AH only redirects to `appie://`, and its login has a captcha, so nothing can do it unattended); the card walks through it and only the person who connected it sees the renew/disconnect controls — the other member sees the status and "ask … to renew". Refreshes are serialised per household with an advisory lock because the refresh token rotates. Under the hood `src/lib/ah/` wraps the AH app's private API — product search, products by id, Mijn lijst read/append, receipts — with every response Zod-parsed at the boundary; nothing outside that folder knows a URL or header.
+
 ---
 
 *Dates aren't pinned here because the Git log has them, but all 20 shipped to production between V2 launch and now.*

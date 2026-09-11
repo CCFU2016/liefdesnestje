@@ -760,6 +760,29 @@ export const visitedPlaces = pgTable(
   ]
 );
 
+// --- Albert Heijn connection (one per household, on one member's AH account) ---
+// Tokens are AES-GCM encrypted at rest (src/lib/auth/encryption.ts). The
+// refresh token rotates on every refresh, so both columns change together.
+export const ahConnections = pgTable("ah_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  householdId: uuid("household_id")
+    .notNull()
+    .unique()
+    .references(() => households.id, { onDelete: "cascade" }),
+  connectedByUserId: uuid("connected_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  accessTokenEnc: text("access_token_enc").notNull(),
+  refreshTokenEnc: text("refresh_token_enc").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  memberId: text("member_id"),
+  // Set when a refresh is rejected: the tokens are dead and a person has to
+  // paste a new login code. The row stays so Settings can say so.
+  needsReconnect: boolean("needs_reconnect").notNull().default(false),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const claudeUsage = pgTable(
   "claude_usage",
   {

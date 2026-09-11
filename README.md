@@ -186,7 +186,12 @@ Things that will come up once a year and are annoying to rediscover.
 - *Consent revoked / password changed* — reconnect the calendar in Settings.
 - *Microsoft events beyond a year out never arrive* — the delta window is re-opened automatically every ~9 months (`delta_window_end`); a manual "sync now" in Settings forces it.
 
-**Rotating secrets.** `AUTH_SECRET` (signs sessions; rotating signs everyone out), `WEBHOOK_SECRET` (reconnect calendars afterwards so subscriptions carry the new value), `CRON_SECRET` (update the cron services too), `ENCRYPTION_KEY` (**do not rotate casually** — every stored OAuth token is encrypted with it; rotating means reconnecting every calendar).
+**Albert Heijn.** Settings → Albert Heijn shows the connection state. It uses the AH app's *private* API (no public one exists; see `docs/albert-heijn-api.md`), so it can break without notice. When it does, `last_error` on `ah_connections` and the Settings card say so, and the app's own Groceries list keeps working regardless.
+- *Connecting or renewing.* Only a person can do it (the AH login has a captcha). On a laptop, open the login link from the Settings card, sign in, copy the failed `appie://login-exit?code=…` link from the address bar and paste it in Settings within a couple of minutes. Codes work once. The refresh token then rotates by itself; expect to redo this rarely.
+- *AH changed something.* All URLs, headers and the client id are in `src/lib/ah/constants.ts`; response shapes are Zod-parsed in `src/lib/ah/*.ts` with `.passthrough()`, so a new field is harmless and a removed one fails loudly. `scripts/ah-login.ts --check` exercises the member calls from the command line. The community reference is github.com/gwillem/appie-go.
+- *What it cannot do.* Remove or tick items in Mijn lijst (no such call exists), order groceries, or log in unattended.
+
+**Rotating secrets.** `AUTH_SECRET` (signs sessions; rotating signs everyone out), `WEBHOOK_SECRET` (reconnect calendars afterwards so subscriptions carry the new value), `CRON_SECRET` (update the cron services too), `ENCRYPTION_KEY` (**do not rotate casually** — every stored OAuth token is encrypted with it; rotating means reconnecting every calendar and Albert Heijn).
 
 **Dependencies.** `next-auth` is a v5 beta; keep it on the newest beta (`pnpm up next-auth@beta`). Run `pnpm outdated` monthly and `pnpm audit --prod` after upgrades. CI (`.github/workflows/ci.yml`) runs typecheck, lint, tests and a build on every push.
 
