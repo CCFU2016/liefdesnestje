@@ -249,6 +249,7 @@ export const todos = pgTable(
     visibility: visibilityEnum("visibility").notNull().default("shared"),
     sortOrder: integer("sort_order").notNull().default(0),
     source: text("source"), // 'meal-plan' | null — tag so we can filter later
+    ahSentAt: timestamp("ah_sent_at", { withTimezone: true }), // sent to the Albert Heijn list
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -782,6 +783,26 @@ export const ahConnections = pgTable("ah_connections", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Which AH product a grocery item resolved to last time, so the review
+// sheet can preselect it and skip the Claude call. Keyed by the normalised
+// item name (src/lib/ah/send.ts normalizeItemKey).
+export const ahProductMatches = pgTable(
+  "ah_product_matches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    itemKey: text("item_key").notNull(),
+    ahProductId: integer("ah_product_id").notNull(),
+    title: text("title").notNull(),
+    imageUrl: text("image_url"),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("ah_product_matches_household_key").on(t.householdId, t.itemKey)]
+);
 
 export const claudeUsage = pgTable(
   "claude_usage",
