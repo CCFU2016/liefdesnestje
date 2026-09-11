@@ -112,6 +112,10 @@ The custom mobile 3-day grid was clamping out-of-range all-day events to the vie
 
 Settings gets an **Albert Heijn** card: one connection per nest, on one member's AH account, tokens AES-GCM encrypted in `ah_connections`. Connecting is a paste-the-code step (AH only redirects to `appie://`, and its login has a captcha, so nothing can do it unattended); the card walks through it and only the person who connected it sees the renew/disconnect controls — the other member sees the status and "ask … to renew". Refreshes are serialised per household with an advisory lock because the refresh token rotates. Under the hood `src/lib/ah/` wraps the AH app's private API — product search, products by id, Mijn lijst read/append, receipts — with every response Zod-parsed at the boundary; nothing outside that folder knows a URL or header.
 
+## 22. Allerhande recipes
+
+"Add a recipe" gets a fifth source: **Allerhande**. Search Albert Heijn's recipe site from inside the app and pick one; it lands in the normal recipe form with structured ingredients (quantity, unit, name), steps, servings, cook time, Nutri-Score-grade nutrition and the hero image copied to our uploads. Pasting an `ah.nl/allerhande/recept/…` link into "From a website" takes the same path. Both go through AH's GraphQL with an anonymous token — no login, no Claude call, so they don't touch the daily extraction budget — and fall back to the old scraper if AH is down.
+
 ---
 
 *Dates aren't pinned here because the Git log has them, but all 20 shipped to production between V2 launch and now.*
