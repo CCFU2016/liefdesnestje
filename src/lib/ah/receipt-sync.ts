@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { ahConnections, ahPosProducts, ahReceiptLines, ahReceipts } from "@/lib/db/schema";
 import { convertPosProductId } from "./bonus-pages";
@@ -92,13 +92,9 @@ export async function getPurchaseStats(householdId: string, opts: { sinceDays?: 
     })
     .from(ahReceiptLines)
     .innerJoin(ahReceipts, eq(ahReceiptLines.receiptId, ahReceipts.id))
-    .where(
-      and(
-        eq(ahReceiptLines.householdId, householdId),
-        sql`${ahReceiptLines.webshopId} is not null`,
-        since ? sql`${ahReceipts.boughtAt} >= ${since}` : sql`true`
-      )
-    )
+    // `gte` binds the Date through the column's type; a raw `sql` param with
+    // a Date is rejected by the postgres-js driver (it worked on PGlite only).
+    .where(and(eq(ahReceiptLines.householdId, householdId), isNotNull(ahReceiptLines.webshopId), since ? gte(ahReceipts.boughtAt, since) : undefined))
     .groupBy(ahReceiptLines.webshopId)
     .orderBy(desc(sql`count(distinct ${ahReceiptLines.receiptId})`));
   const out = new Map<number, PurchaseStat>();
