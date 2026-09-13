@@ -1,0 +1,115 @@
+{
+  "sectionType": "PBO",
+  "sectionDescription": "Eerder gekocht",
+  "bonusGroupOrProducts": [
+    {
+      "product": {
+        "webshopId": 4117,
+        "title": "AH Paprika rood",
+        "brand": "AH",
+        "salesUnitSize": "per stuk",
+        "currentPrice": null,
+        "priceBeforeBonus": 1.09,
+        "isBonus": true,
+        "bonusMechanism": "1 + 1 GRATIS",
+        "bonusStartDate": "2026-09-07",
+        "bonusEndDate": "2026-09-13",
+        "images": [
+          {
+            "width": 800,
+            "height": 800,
+            "url": "https://static.ah.nl/dam/product/AHI_4354523130323031303936?revLabel=1&rendition=800x800_WEBP&fileType=binary"
+          },
+          {
+            "width": 400,
+            "height": 400,
+            "url": "https://static.ah.nl/dam/product/AHI_4354523130323031303936?revLabel=1&rendition=400x400_WEBP&fileType=binary"
+          }
+        ],
+        "isOrderable": true
+      }
+    },
+    {
+      "product": {
+        "webshopId": 80585,
+        "title": "AH Pitloze witte druiven",
+        "brand": "AH",
+        "salesUnitSize": "500 g",
+        "currentPrice": null,
+        "priceBeforeBonus": 2.59,
+        "isBonus": true,
+        "bonusMechanism": "1 + 1 GRATIS",
+        "bonusStartDate": "2026-09-07",
+        "bonusEndDate": "2026-09-13",
+        "images": [
+          {
+            "width": 800,
+            "height": 800,
+            "url": "https://static.ah.nl/dam/product/AHI_5f774358334657725176323959323531433465527567?revLabel=1&rendition=800x800_WEBP&fileType=binary"
+          },
+          {
+            "width": 400,
+            "height": 400,
+            "url": "https://static.ah.nl/dam/product/AHI_5f774358334657725176323959323531433465527567?revLabel=1&rendition=400x400_WEBP&fileType=binary"
+          }
+        ],
+        "isOrderable": true
+      }
+    },
+    {
+      "product": {
+        "webshopId": 177754,
+        "title": "AH Blauwe bessen",
+        "brand": "AH",
+        "salesUnitSize": "300 g",
+        "currentPrice": null,
+        "priceBeforeBonus": 4.29,
+        "isBonus": true,
+        "bonusMechanism": "VOOR 3.99",
+        "bonusStartDate": "2026-09-07",
+        "bonusEndDate": "2026-09-13",
+        "images": [
+          {
+            "width": 800,
+            "height": 800,
+            "url": "https://static.ah.nl/dam/product/AHI_43545239383832393636?revLabel=1&rendition=800x800_WEBP&fileType=binary"
+          },
+          {
+            "width": 400,
+            "height": 400,
+            "url": "https://static.ah.nl/dam/product/AHI_43545239383832393636?revLabel=1&rendition=400x400_WEBP&fileType=binary"
+          }
+        ],
+        "isOrderable": true
+      }
+    },
+    {
+      "product": {
+        "webshopId": 412158,
+        "title": "Oatly! Haver barista edition",
+        "brand": "Oatly!",
+        "salesUnitSize": "1 l",
+        "currentPrice": 1.88,
+        "priceBeforeBonus": 2.89,
+        "isBonus": true,
+        "bonusMechanism": "35% korting",
+        "bonusStartDate": "2026-09-07",
+        "bonusEndDate": "2026-09-13",
+        "images": [
+          {
+            "width": 800,
+            "height": 800,
+            "url": "https://static.ah.nl/dam/product/AHI_4354523130313036343637?revLabel=1&rendition=800x800_WEBP&fileType=binary"
+          },
+          {
+            "width": 400,
+            "height": 400,
+            "url": "https://static.ah.nl/dam/product/AHI_4354523130313036343637?revLabel=1&rendition=400x400_WEBP&fileType=binary"
+          }
+        ],
+        "isOrderable": true
+      }
+    }
+  ],
+  "sectionImage": []
+}

@@ -9,6 +9,8 @@ import { CalendarPlus, ChefHat, Edit, ExternalLink, Sparkles, Star, Trash2 } fro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAhBonus } from "@/components/ah/use-ah-bonus";
+import { BonusTag } from "@/components/ah/bonus-tag";
 
 type Ingredient = { quantity: string | null; unit: string | null; name: string; notes: string | null };
 type Recipe = {
@@ -47,6 +49,7 @@ export function RecipeDetailClient({
 }) {
   const router = useRouter();
   const [recipe, setRecipe] = useState(initialRecipe);
+  const bonus = useAhBonus(recipe.ingredients.map((i) => i.name));
   const [fav, setFav] = useState(initialFav);
   const [busy, setBusy] = useState(false);
 
@@ -224,6 +227,12 @@ export function RecipeDetailClient({
                   </span>{" "}
                   {ing.name}
                   {ing.notes && <span className="text-zinc-500 text-xs"> ({ing.notes})</span>}
+                  {bonus[ing.name] && (
+                    <>
+                      {" "}
+                      <BonusTag label={bonus[ing.name].label} title={bonus[ing.name].productTitle} />
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

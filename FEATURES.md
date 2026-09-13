@@ -108,6 +108,26 @@ New `safeFetch` helper blocks private/loopback/link-local IPs (v4 and v6, includ
 
 The custom mobile 3-day grid was clamping out-of-range all-day events to the view edges, so events from previous weeks leaked into today's row. Added an explicit skip-if-outside-view check and day-diff column calculation so only events that overlap the viewed range show up.
 
+## 21. Albert Heijn connection
+
+Settings gets an **Albert Heijn** card: one connection per nest, on one member's AH account, tokens AES-GCM encrypted in `ah_connections`. Connecting is a paste-the-code step (AH only redirects to `appie://`, and its login has a captcha, so nothing can do it unattended); the card walks through it and only the person who connected it sees the renew/disconnect controls — the other member sees the status and "ask … to renew". Refreshes are serialised per household with an advisory lock because the refresh token rotates. Under the hood `src/lib/ah/` wraps the AH app's private API — product search, products by id, Mijn lijst read/append, receipts — with every response Zod-parsed at the boundary; nothing outside that folder knows a URL or header.
+
+## 22. Allerhande recipes
+
+"Add a recipe" gets a fifth source: **Allerhande**. Search Albert Heijn's recipe site from inside the app and pick one; it lands in the normal recipe form with structured ingredients (quantity, unit, name), steps, servings, cook time, Nutri-Score-grade nutrition and the hero image copied to our uploads. Pasting an `ah.nl/allerhande/recept/…` link into "From a website" takes the same path. Both go through AH's GraphQL with an anonymous token — no login, no Claude call, so they don't touch the daily extraction budget — and fall back to the old scraper if AH is down.
+
+## 23. Send to Albert Heijn
+
+The feature the connection exists for: plan meals here, shop with the Appie app (aisle order, bonus). The Groceries to-do list gets a **Send N new to Albert Heijn** button, and the meal plan's "Generate shopping list" offers the same right after pushing. One batched Claude call turns each item into a Dutch search term and a pack count (a household that chose "AH Kipfilet" for "chicken breast" before skips Claude next time: `ah_product_matches`), AH product search supplies up to three candidates per item, and a review sheet shows thumbnail, size, price and bonus with swap, "just add as text" and a pack stepper, plus a footer estimate. Confirm sends everything to Mijn lijst in one call; sent to-dos get `ah_sent_at` so nothing goes twice, and the sheet offers to tick them off here too. AH down, not connected or needing renewal each get their own plain-language message; the Groceries list itself is never touched by a failure.
+
+## 24. Bonus tags
+
+Once an ingredient has been sent to Albert Heijn as a product, the app knows which AH product it is — so a recipe's ingredient list and the week's meal cards show a small orange **Bonus · 2e halve prijs** tag whenever that product is in bonus this week. One anonymous products-by-id call per distinct set of ingredients, cached six hours on the server and an hour in the browser; nothing is looked up for ingredients that were never matched, and if AH is unreachable the tags simply don't appear.
+
+## 25. Bonus Box on autopilot, and "in the bonus this week"
+
+In-store receipts are imported into our own tables (till product ids bridged to webshop ids through AH's `productConvertId`), which makes purchase frequency something the app can query. Two things use it. A weekly job (Mon/Thu cron, or **Check now** in Settings) reads the personal Bonus Box for the current and next bonus week and activates the offers whose products the nest bought at least twice in the past year, best first, within AH's ten-activation limit; offers already switched on in the app are left alone, and Settings lists what was activated with the status AH confirmed. And the Today page gets an **In the bonus this week** card under tonight's dinner: AH's "bonus for products you bought before", ordered by how often we actually buy each one, collapsed to a button until tapped, cached six hours and never allowed to slow the page.
+
 ---
 
 *Dates aren't pinned here because the Git log has them, but all 20 shipped to production between V2 launch and now.*

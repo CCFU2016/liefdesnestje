@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { type RecipeOption, type MealEntry, type Member, type Absence, fetcher, toYmd, parseYmd } from "./types";
 
 import { MealCardItem } from "./components/meal-card";
+import { useAhBonus } from "@/components/ah/use-ah-bonus";
 import { AddMealDialog } from "./components/add-meal-dialog";
 import { ShoppingListDialog } from "./components/shopping-list-dialog";
 
@@ -39,7 +40,7 @@ export function MealsClient({
     fetcher,
     { refreshInterval: 5000 }
   );
-  const entries = data?.entries ?? [];
+  const entries = useMemo(() => data?.entries ?? [], [data]);
 
   const { data: absData, mutate: mutateAbs } = useSWR<{ absences: Absence[] }>(
     `/api/dinner-absences?from=${rangeFrom}&to=${rangeTo}`,
@@ -76,6 +77,17 @@ export function MealsClient({
     }
     mutateAbs();
   };
+
+  // Ingredient names across the week, for the bonus tags on the cards.
+  const weekIngredientNames = useMemo(() => {
+    const names: string[] = [];
+    for (const e of entries) {
+      const ings = Array.isArray(e.recipe?.ingredients) ? (e.recipe!.ingredients as Array<{ name?: unknown }>) : [];
+      for (const i of ings) if (typeof i?.name === "string") names.push(i.name);
+    }
+    return names;
+  }, [entries]);
+  const bonus = useAhBonus(weekIngredientNames);
 
   const entriesByDate = useMemo(() => {
     const m = new Map<string, MealEntry[]>();
@@ -210,6 +222,7 @@ export function MealsClient({
                       <MealCardItem
                         key={e.id}
                         entry={e}
+                        bonus={bonus}
                         onEdit={() => setAddDialog({ date: ymd, entry: e })}
                         onRemove={() => removeEntry(e.id)}
                         onToggleCooked={() => toggleCooked(e)}

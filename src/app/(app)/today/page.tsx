@@ -19,6 +19,8 @@ import { DayNav } from "./day-nav";
 import { LocalTime } from "./local-time";
 import { DailyPhotoCard } from "./daily-photo-card";
 import { SwipeDays } from "./swipe-days";
+import { BonusThisWeekCard } from "@/components/ah/bonus-this-week";
+import { getBonusThisWeek } from "@/lib/ah/weekly";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { addDays, differenceInCalendarDays, endOfDay, format, isToday as isTodayFn, startOfDay } from "date-fns";
 import Link from "next/link";
@@ -181,6 +183,15 @@ export default async function TodayPage({
   });
 
   const tonight = tonightRaw[0];
+
+  // "In the bonus this week": cached six hours, never allowed to slow the
+  // page down — an unreachable AH just means no card.
+  const bonusWeek = viewingToday
+    ? await Promise.race([
+        getBonusThisWeek(ctx.householdId),
+        new Promise<{ period: null; items: [] }>((resolve) => setTimeout(() => resolve({ period: null, items: [] }), 4000)),
+      ])
+    : { period: null, items: [] as [] };
 
   const absentMembers = todayAbsences
     .map((a) => memberByUserId.get(a.userId))
@@ -409,6 +420,22 @@ export default async function TodayPage({
             )}
           </CardContent>
         </Card>
+
+        {viewingToday && bonusWeek.items.length > 0 && (
+          <BonusThisWeekCard
+            periodEnd={bonusWeek.period?.end ?? null}
+            items={bonusWeek.items.map((p) => ({
+              id: p.id,
+              title: p.title,
+              unitSize: p.unitSize,
+              price: p.price,
+              priceBeforeBonus: p.priceBeforeBonus,
+              bonusLabel: p.bonusLabel,
+              imageUrl: p.imageUrl,
+              times: p.times,
+            }))}
+          />
+        )}
 
         {todayTravel.length > 0 && (
           <Card className="md:col-span-2 min-w-0 overflow-hidden">

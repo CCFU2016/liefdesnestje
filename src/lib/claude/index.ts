@@ -7,15 +7,18 @@ import {
   ExtractedRecipeSchema,
   ExtractedReservationSchema,
   ExtractedRestaurantSchema,
+  GrocerySearchTermsSchema,
   SocialExtractionSchema,
   type AggregatedList,
   type EstimatedNutrition,
   type ExtractedRecipe,
   type ExtractedReservation,
   type ExtractedRestaurant,
+  type GrocerySearchTerms,
   type SocialExtraction,
 } from "./schemas";
 import {
+  GROCERY_SEARCH_TERM_SYSTEM_PROMPT,
   INGREDIENT_AGGREGATION_SYSTEM_PROMPT,
   NUTRITION_ESTIMATION_SYSTEM_PROMPT,
   RECIPE_SYSTEM_PROMPT,
@@ -259,6 +262,53 @@ export async function aggregateIngredients(
     await recordUsage({
       userId,
       callType: "aggregate",
+      success: false,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: 0,
+      latencyMs: Date.now() - started,
+    });
+    throw e;
+  }
+}
+
+// --- matchGroceryTerms ---
+
+/**
+ * One batched call: grocery items (any language, recipe units) → Dutch AH
+ * search terms and pack counts. Same daily budget as the extractors.
+ */
+export async function matchGroceryTerms(
+  items: Array<{ name: string; amount: string | null }>,
+  userId: string
+): Promise<GrocerySearchTerms> {
+  await assertWithinDailyCap(userId);
+  const started = Date.now();
+  const payload = JSON.stringify(items);
+  const inputBytes = Buffer.byteLength(payload, "utf8");
+
+  try {
+    const resp = await client().messages.parse({
+      model: MODEL,
+      thinking: THINKING,
+      max_tokens: 3000,
+      system: GROCERY_SEARCH_TERM_SYSTEM_PROMPT,
+      output_config: { format: zodOutputFormat(GrocerySearchTermsSchema) },
+      messages: [{ role: "user", content: `Shopping list items:\n\n${payload}` }],
+    });
+    if (!resp.parsed_output) throw new Error("Claude returned no parsed output");
+    await recordUsage({
+      userId,
+      callType: "ah-match",
+      success: true,
+      inputSizeBytes: inputBytes,
+      outputSizeBytes: JSON.stringify(resp.parsed_output).length,
+      latencyMs: Date.now() - started,
+    });
+    return resp.parsed_output;
+  } catch (e) {
+    await recordUsage({
+      userId,
+      callType: "ah-match",
       success: false,
       inputSizeBytes: inputBytes,
       outputSizeBytes: 0,

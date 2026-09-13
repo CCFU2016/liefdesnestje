@@ -128,6 +128,8 @@ export async function POST(req: Request) {
       fallback,
       listId: destListId,
       insertedCount: inserted.length,
+      // so the dialog can offer "Send to Albert Heijn" for exactly these
+      todos: inserted.map((t) => ({ id: t.id, title: t.title })),
     });
   } catch (e) {
     if (e instanceof UnauthorizedError) {

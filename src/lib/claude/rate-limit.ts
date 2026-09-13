@@ -29,7 +29,7 @@ export async function assertWithinDailyCap(userId: string): Promise<void> {
 
 export async function recordUsage(input: {
   userId: string;
-  callType: "extract-text" | "extract-image" | "extract-social" | "aggregate";
+  callType: "extract-text" | "extract-image" | "extract-social" | "aggregate" | "ah-match";
   success: boolean;
   inputSizeBytes: number;
   outputSizeBytes: number;

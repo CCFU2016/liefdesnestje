@@ -10,6 +10,7 @@ import { downloadAndSaveImage } from "@/lib/uploads";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 import { httpUrl } from "@/lib/validation";
 import { MAX_JSON_BYTES, rejectIfTooLarge } from "@/lib/http/body-limit";
+import { getRecipe as getAllerhandeRecipe, parseAllerhandeId } from "@/lib/ah/recipes";
 
 export const maxDuration = 60;
 
@@ -36,6 +37,22 @@ export async function POST(req: Request) {
 
     // URL path.
     const url = parsed.data.url;
+
+    // Allerhande: AH's GraphQL gives structured ingredients, steps and
+    // nutrition for free, no Claude call. Falls through to scraping if it fails.
+    const allerhandeId = parseAllerhandeId(url);
+    if (allerhandeId) {
+      try {
+        const recipe = await getAllerhandeRecipe(allerhandeId);
+        if (recipe) {
+          const imageUrl = recipe.imageUrl ? await downloadAndSaveImage(recipe.imageUrl) : null;
+          return NextResponse.json({ recipe: { ...recipe, sourceUrl: url, imageUrl: imageUrl ?? recipe.imageUrl } });
+        }
+      } catch (e) {
+        console.warn("allerhande import failed, falling back to scraping:", e instanceof Error ? e.message : e);
+      }
+    }
+
     const html = await fetchBoundedHtml(url);
     if (!html) {
       return NextResponse.json(

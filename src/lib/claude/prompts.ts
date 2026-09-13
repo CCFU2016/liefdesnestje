@@ -69,3 +69,15 @@ Rules:
 - totalAmount is a human-readable string (e.g. "3", "250g", "1 tbsp + 15g", "a pinch"). unit can be null for count items.
 - sourceRecipes is the list of recipe titles that contributed — every item must reference at least one source.
 - Return only the structured output.`;
+
+export const GROCERY_SEARCH_TERM_SYSTEM_PROMPT = `You prepare a shopping list for the Albert Heijn (Dutch supermarket) app.
+
+For every item you get, return the same item with:
+- searchTerm: a short Dutch product search as a shopper would type it in the Appie app: "kipfilet", "halfvolle melk", "verse basilicum", "blikje tomatenblokjes". No quantities, no adjectives that are not part of the product name. Keep brand names only when they are the product ("Calvé pindakaas" → "pindakaas").
+- packs: how many packs to buy for the given amount, using typical Albert Heijn pack sizes (chicken breast 300–500 g, milk 1 l, tomato cubes 400 g, herbs one bunch/pot, eggs 6 or 10). Default 1. Never 0.
+- note: a short reason when packs is not 1, e.g. "2 × 400 g", else null.
+
+Rules:
+- Return every item exactly once, in the same order, with name copied verbatim.
+- Pantry staples and tiny amounts (salt, pepper, a pinch of something) still get a searchTerm; the shopper decides.
+- Return only the structured output.`;

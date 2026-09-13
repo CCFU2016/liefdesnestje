@@ -100,3 +100,19 @@ export const ExtractedReservationSchema = z.object({
 });
 
 export type ExtractedReservation = z.infer<typeof ExtractedReservationSchema>;
+
+// Albert Heijn search terms for grocery items. One batched call turns our
+// (often English, recipe-unit) list into Dutch product searches.
+export const GrocerySearchTermSchema = z.object({
+  name: z.string(), // the item as given, unchanged, so results can be matched back
+  searchTerm: z.string(), // short Dutch product term as typed in the Appie app
+  packs: z.number().int().min(1).max(20), // packs to buy for the amount, given usual AH pack sizes
+  note: z.string().nullable(), // e.g. "2 × 250 g" — shown next to the pack count
+});
+
+export const GrocerySearchTermsSchema = z.object({
+  items: z.array(GrocerySearchTermSchema),
+});
+
+export type GrocerySearchTerm = z.infer<typeof GrocerySearchTermSchema>;
+export type GrocerySearchTerms = z.infer<typeof GrocerySearchTermsSchema>;

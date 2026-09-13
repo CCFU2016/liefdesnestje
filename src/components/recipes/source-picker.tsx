@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileText, Image as ImageIcon, Link as LinkIcon, Pencil, Sparkles } from "lucide-react";
+import { FileText, Image as ImageIcon, Link as LinkIcon, Pencil, ShoppingBasket, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RecipeForm, type RecipeFormValue } from "./recipe-form";
+import { AllerhandeSearch } from "./allerhande-search";
 
-type Source = "picker" | "manual" | "image" | "url" | "social" | "caption-fallback";
+type Source = "picker" | "manual" | "image" | "url" | "social" | "caption-fallback" | "allerhande";
 
 export function SourcePicker() {
   const router = useRouter();
@@ -55,6 +56,12 @@ export function SourcePicker() {
             title="TikTok / Instagram reel"
             subtitle="Paste the link"
             onClick={() => setSource("social")}
+          />
+          <SourceCard
+            icon={<ShoppingBasket className="h-5 w-5" />}
+            title="Allerhande"
+            subtitle="Search Albert Heijn's recipes"
+            onClick={() => setSource("allerhande")}
           />
         </div>
       )}
@@ -126,6 +133,26 @@ export function SourcePicker() {
               setExtracted({ ...body.recipe, sourceUrl: url });
             } catch (e) {
               toast.error(e instanceof Error ? e.message : "Extraction failed");
+            } finally {
+              setLoading(false);
+            }
+          }}
+          onCancel={() => setSource("picker")}
+        />
+      )}
+
+      {source === "allerhande" && (
+        <AllerhandeSearch
+          loading={loading}
+          onPick={async (id) => {
+            setLoading(true);
+            try {
+              const res = await fetch(`/api/recipes/allerhande/${id}`);
+              const body = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(body.error ?? "Couldn't load that recipe");
+              setExtracted(body.recipe);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Couldn't load that recipe");
             } finally {
               setLoading(false);
             }
@@ -275,7 +302,7 @@ function UrlExtractor({
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://www.nytimes.com/cooking/…"
+          placeholder="https://www.nytimes.com/cooking/…  or an ah.nl/allerhande link"
           disabled={loading}
         />
         <p className="text-xs text-zinc-500">Most major recipe sites work — we prefer structured data when available.</p>

@@ -4,19 +4,27 @@ import Link from "next/link";
 import { ChefHat, MapPin, Trash2, Check, UtensilsCrossed } from "lucide-react";
 import { format } from "date-fns";
 import { type MealEntry, buildMapsUrl } from "../types";
+import { BonusTag } from "@/components/ah/bonus-tag";
 
 export function MealCardItem({
   entry,
   onEdit,
   onRemove,
   onToggleCooked,
+  bonus,
 }: {
   entry: MealEntry;
   onEdit: () => void;
   onRemove: () => void;
   onToggleCooked: () => void;
+  /** ingredient name → bonus tag, for the whole week; only matching names show */
+  bonus?: Record<string, { label: string; productTitle: string }>;
 }) {
   const isCooked = !!entry.cookedAt;
+  const ings = Array.isArray(entry.recipe?.ingredients) ? (entry.recipe!.ingredients as Array<{ name?: unknown }>) : [];
+  const inBonus = bonus
+    ? ings.map((i) => (typeof i?.name === "string" ? i.name : "")).filter((n) => n && bonus[n])
+    : [];
   const isRestaurant = !!entry.restaurantName;
   const mapsUrl = buildMapsUrl(entry);
   return (
@@ -53,6 +61,12 @@ export function MealCardItem({
             )}
             {entry.visibility === "private" && (
               <span className="text-[10px] text-zinc-500">· private</span>
+            )}
+            {inBonus.length > 0 && bonus && (
+              <BonusTag
+                label={`${inBonus[0]}${inBonus.length > 1 ? ` +${inBonus.length - 1}` : ""}`}
+                title={inBonus.map((n) => `${n}: ${bonus[n].label} (${bonus[n].productTitle})`).join("\n")}
+              />
             )}
             {entry.restaurantMenuUrl && (
               <a

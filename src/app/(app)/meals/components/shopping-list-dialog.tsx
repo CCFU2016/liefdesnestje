@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import * as Dialog from "@radix-ui/react-dialog";
 import { type MealEntry, parseYmd } from "../types";
+import { SendToAhDialog, type SendItem } from "@/components/ah/send-to-ah-dialog";
 
 export function ShoppingListDialog({
   entries,
@@ -25,6 +26,8 @@ export function ShoppingListDialog({
       }
   >(null);
   const [busy, setBusy] = useState(false);
+  const [pushed, setPushed] = useState<{ count: number; todos: SendItem[] } | null>(null);
+  const [sending, setSending] = useState(false);
 
   const toggle = (id: string) => {
     const next = new Set(selected);
@@ -47,7 +50,12 @@ export function ShoppingListDialog({
         setPreview({ items: body.items, fallback: body.fallback });
       } else {
         toast.success(`Pushed ${body.insertedCount} items to your groceries list${body.fallback ? " (fallback list — aggregation couldn't run)" : ""}.`);
-        onClose();
+        const todos = (body.todos ?? []) as Array<{ id: string; title: string }>;
+        if (todos.length === 0) {
+          onClose();
+        } else {
+          setPushed({ count: body.insertedCount, todos: todos.map((t) => ({ todoId: t.id, title: t.title })) });
+        }
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -56,13 +64,29 @@ export function ShoppingListDialog({
     }
   };
 
+  if (sending && pushed) {
+    return <SendToAhDialog items={pushed.todos} onClose={onClose} />;
+  }
+
   return (
     <Dialog.Root open onOpenChange={(v) => !v && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white p-6 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 max-h-[80vh] overflow-y-auto">
           <Dialog.Title className="text-lg font-semibold">Generate shopping list</Dialog.Title>
-          {!preview && (
+          {pushed && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm">
+                {pushed.count} {pushed.count === 1 ? "item is" : "items are"} in your Groceries list. Also send them to the Albert Heijn app?
+              </p>
+              <p className="text-xs text-zinc-500">You review every product before anything is sent.</p>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" onClick={onClose}>Done</Button>
+                <Button onClick={() => setSending(true)}>Send to Albert Heijn</Button>
+              </div>
+            </div>
+          )}
+          {!preview && !pushed && (
             <div className="mt-4 space-y-3">
               <p className="text-sm text-zinc-500">Pick which meals to include:</p>
               <ul className="space-y-1">
@@ -92,7 +116,7 @@ export function ShoppingListDialog({
             </div>
           )}
 
-          {preview && (
+          {preview && !pushed && (
             <div className="mt-4 space-y-3">
               {preview.fallback && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-2 text-xs text-amber-900 dark:text-amber-200">

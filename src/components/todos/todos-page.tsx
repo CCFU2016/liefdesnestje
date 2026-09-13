@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RecurrencePicker, describeRRule } from "./recurrence-picker";
 import { CommandBar } from "./command-bar";
+import { SendToAhDialog } from "@/components/ah/send-to-ah-dialog";
 
 type List = { id: string; name: string };
 type Member = { userId: string; displayName: string; color: string };
@@ -40,6 +41,7 @@ type Todo = {
   recurrenceRule: string | null;
   visibility: "private" | "shared";
   sortOrder: number;
+  ahSentAt?: Date | string | null;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -73,6 +75,7 @@ export function TodosPage({
   const [rrule, setRRule] = useState<string | null>(null);
   const [isPrivate, setIsPrivate] = useState(false);
   const [scope, setScope] = useState<TodoScope>("all");
+  const [ahOpen, setAhOpen] = useState(false);
   useEffect(() => {
     try {
       if (localStorage.getItem(SCOPE_STORAGE_KEY) === "mine") setScope("mine");
@@ -97,6 +100,12 @@ export function TodosPage({
   const allTodos = (data?.todos ?? []).sort((a, b) => a.sortOrder - b.sortOrder);
   const mineCount = allTodos.filter((t) => isRelevantTo(t, currentUserId)).length;
   const todos = scope === "mine" ? allTodos.filter((t) => isRelevantTo(t, currentUserId)) : allTodos;
+
+  // The groceries list gets "Send to Albert Heijn"; only open items that
+  // were not sent before count, so nothing goes twice.
+  const activeList = lists.find((l) => l.id === activeListId);
+  const isGroceries = /grocer/i.test(activeList?.name ?? "");
+  const unsentGroceries = allTodos.filter((t) => !t.completedAt && !t.ahSentAt);
 
   // Local optimistic reorder
   const [orderedIds, setOrderedIds] = useState<string[]>([]);
@@ -252,7 +261,13 @@ export function TodosPage({
         <div className="flex-1 min-w-0">
           <Card>
             <CardHeader className="flex-row items-center justify-between gap-2">
-              <CardTitle>{lists.find((l) => l.id === activeListId)?.name ?? "To-dos"}</CardTitle>
+              <CardTitle>{activeList?.name ?? "To-dos"}</CardTitle>
+              <div className="flex items-center gap-2">
+              {isGroceries && (
+                <Button size="sm" variant="secondary" onClick={() => setAhOpen(true)} disabled={unsentGroceries.length === 0} className="whitespace-nowrap">
+                  {unsentGroceries.length === 0 ? "All sent to AH" : `Send ${unsentGroceries.length} new to Albert Heijn`}
+                </Button>
+              )}
               <div
                 role="radiogroup"
                 aria-label="Show"
@@ -280,7 +295,18 @@ export function TodosPage({
                   </button>
                 ))}
               </div>
+              </div>
             </CardHeader>
+            {ahOpen && (
+              <SendToAhDialog
+                items={unsentGroceries.map((t) => ({ todoId: t.id, title: t.title }))}
+                onClose={() => {
+                  setAhOpen(false);
+                  mutate();
+                }}
+                onSent={() => mutate()}
+              />
+            )}
             <CardContent className="space-y-4">
               <form
                 onSubmit={(e) => {
