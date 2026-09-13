@@ -103,9 +103,12 @@ export function AlbertHeijnCard() {
       </div>
 
       {data.connected && !data.needsReconnect && (
-        <p className="text-[11px] text-zinc-500">
-          Groceries you send from the meal plan land in Mijn lijst in the Appie app. Ticking off and removing happens there.
-        </p>
+        <>
+          <p className="text-[11px] text-zinc-500">
+            Groceries you send from the meal plan land in Mijn lijst in the Appie app. Ticking off and removing happens there.
+          </p>
+          <BonusBoxBlock canManage={data.canManage} />
+        </>
       )}
 
       {needsAction && !data.canManage && (
@@ -155,6 +158,75 @@ export function AlbertHeijnCard() {
             One connection per nest, on one AH account. Your partner never has to log in.
           </p>
         </form>
+      )}
+    </div>
+  );
+}
+
+type WeeklyStatus = {
+  connected: boolean;
+  receipts: number;
+  activations: Array<{ title: string; periodStart: string; periodEnd: string; score: number; status: string; at: string }>;
+};
+
+/** Bonus Box: what the weekly job activated, and a button to run it now. */
+function BonusBoxBlock({ canManage }: { canManage: boolean }) {
+  const { data, mutate } = useSWR<WeeklyStatus>("/api/integrations/albert-heijn/weekly", fetcher);
+  const [running, setRunning] = useState(false);
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const res = await fetch("/api/integrations/albert-heijn/weekly", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? "Couldn't check the Bonus Box");
+      const acts = (body.periods ?? []).flatMap((p: { activated: Array<{ title: string; status: string }> }) => p.activated);
+      const imported = body.receipts?.imported ?? 0;
+      toast.success(
+        acts.length
+          ? `Activated ${acts.length}: ${acts.map((a: { title: string }) => a.title).join(", ")}`
+          : `Nothing new to activate${imported ? ` · ${imported} receipts imported` : ""}`
+      );
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't check the Bonus Box");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  if (!data) return null;
+  return (
+    <div className="rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <div className="font-medium">Bonus Box</div>
+          <div className="text-xs text-zinc-500">
+            Every Monday the offers for products you buy most are switched on for you.
+            {data.receipts > 0 ? ` Based on ${data.receipts} receipts.` : " Receipts are imported on the first run."}
+          </div>
+        </div>
+        {canManage && (
+          <Button size="sm" variant="secondary" onClick={runNow} disabled={running}>
+            {running ? "Checking…" : "Check now"}
+          </Button>
+        )}
+      </div>
+      {data.activations.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs">
+          {data.activations.slice(0, 6).map((a, i) => (
+            <li key={i} className="flex justify-between gap-2">
+              <span className="truncate">
+                {a.title} <span className="text-zinc-500">· week of {a.periodStart}</span>
+              </span>
+              <span className={a.status === "activated" ? "text-emerald-600" : a.status === "dry-run" ? "text-zinc-500" : "text-amber-600"}>{a.status}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

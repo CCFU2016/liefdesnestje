@@ -204,6 +204,13 @@
       "when": 1789115024555,
       "tag": "0028_ah_product_matches",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789288752793,
+      "tag": "0029_ah_receipts_bonus_box",
+      "breakpoints": true
     }
   ]
 }

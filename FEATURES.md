@@ -124,6 +124,10 @@ The feature the connection exists for: plan meals here, shop with the Appie app 
 
 Once an ingredient has been sent to Albert Heijn as a product, the app knows which AH product it is — so a recipe's ingredient list and the week's meal cards show a small orange **Bonus · 2e halve prijs** tag whenever that product is in bonus this week. One anonymous products-by-id call per distinct set of ingredients, cached six hours on the server and an hour in the browser; nothing is looked up for ingredients that were never matched, and if AH is unreachable the tags simply don't appear.
 
+## 25. Bonus Box on autopilot, and "in the bonus this week"
+
+In-store receipts are imported into our own tables (till product ids bridged to webshop ids through AH's `productConvertId`), which makes purchase frequency something the app can query. Two things use it. A weekly job (Mon/Thu cron, or **Check now** in Settings) reads the personal Bonus Box for the current and next bonus week and activates the offers whose products the nest bought at least twice in the past year, best first, within AH's ten-activation limit; offers already switched on in the app are left alone, and Settings lists what was activated with the status AH confirmed. And the Today page gets an **In the bonus this week** card under tonight's dinner: AH's "bonus for products you bought before", ordered by how often we actually buy each one, collapsed to a button until tapped, cached six hours and never allowed to slow the page.
+
 ---
 
 *Dates aren't pinned here because the Git log has them, but all 20 shipped to production between V2 launch and now.*

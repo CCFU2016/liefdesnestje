@@ -12,7 +12,7 @@
       "id": "R-1",
       "total": { "amount": 43.21 },
       "products": [
-        { "id": "12", "quantity": 2, "name": "AH KIPFILET", "price": { "amount": 7.35 }, "amount": { "amount": 14.7 } },
+        { "id": "12", "quantity": 2, "name": "AH KIPFILET", "price": { "amount": 7.35 }, "amount": { "amount": 14.7 }, "indicators": [{ "name": "bonusDiscount", "discount": "B" }] },
         { "id": null, "quantity": 1, "name": "STATIEGELD", "price": null, "amount": { "amount": 0.25 } }
       ],
       "discounts": [{ "name": "BONUS", "amount": { "amount": -0.46 } }],

@@ -92,8 +92,8 @@ describe("receipt mappers", () => {
     const r = mapReceipt(f.details);
     expect(r?.total).toBe(43.21);
     expect(r?.lines).toEqual([
-      { productId: "12", name: "AH KIPFILET", quantity: 2, price: 7.35, amount: 14.7 },
-      { productId: null, name: "STATIEGELD", quantity: 1, price: null, amount: 0.25 },
+      { productId: "12", name: "AH KIPFILET", quantity: 2, price: 7.35, amount: 14.7, bonusKind: "bonusDiscount" },
+      { productId: null, name: "STATIEGELD", quantity: 1, price: null, amount: 0.25, bonusKind: null },
     ]);
     expect(r?.discounts).toEqual([{ name: "BONUS", amount: -0.46 }]);
     expect(r?.payments).toEqual([{ method: "PIN", amount: 43.21 }]);

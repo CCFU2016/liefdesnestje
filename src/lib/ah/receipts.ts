@@ -10,6 +10,7 @@ export type AhReceiptSummary = {
 };
 
 export type AhReceiptLine = {
+  /** The till's product id (not the webshop id; see productConvertId in bonus-pages.ts). */
   productId: string | null;
   name: string;
   quantity: number | null;
@@ -17,6 +18,8 @@ export type AhReceiptLine = {
   price: number | null;
   /** Line total */
   amount: number | null;
+  /** Bought under a bonus ('bonusDiscount') or a personal Bonus Box offer ('bonusBox'). */
+  bonusKind: "bonusDiscount" | "bonusBox" | null;
 };
 
 export type AhReceipt = {
@@ -56,6 +59,7 @@ const ReceiptDetailsSchema = z.object({
               name: z.string().max(500).nullish(),
               price: Money,
               amount: Money,
+              indicators: z.array(z.object({ name: z.string().max(50).nullish() }).passthrough()).nullish(),
             })
             .passthrough()
         )
@@ -76,7 +80,7 @@ const LIST_QUERY = `query FetchPosReceipts($offset: Int!, $limit: Int!) {
 const DETAILS_QUERY = `query FetchReceipt($id: String!) {
   posReceiptDetails(id: $id) {
     id total { amount }
-    products { id quantity name price { amount } amount { amount } }
+    products { id quantity name price { amount } amount { amount } indicators { name } }
     discounts { name amount { amount } }
     payments { method amount { amount } }
   }
@@ -104,6 +108,11 @@ export function mapReceipt(data: unknown): AhReceipt | null {
       quantity: p.quantity ?? null,
       price: p.price?.amount ?? null,
       amount: p.amount?.amount ?? null,
+      bonusKind: (p.indicators ?? []).some((i) => i.name === "bonusBox")
+        ? "bonusBox"
+        : (p.indicators ?? []).some((i) => i.name === "bonusDiscount")
+          ? "bonusDiscount"
+          : null,
     })),
     discounts: (d.discounts ?? []).map((x) => ({ name: x.name ?? "", amount: x.amount?.amount ?? null })),
     payments: (d.payments ?? []).map((x) => ({ method: x.method ?? "", amount: x.amount?.amount ?? null })),

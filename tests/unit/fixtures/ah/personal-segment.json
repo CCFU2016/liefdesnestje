@@ -1,0 +1,118 @@
+{
+  "data": {
+    "bonusPromotions": [
+      {
+        "id": "671729",
+        "title": "AH Biologische mozzarela",
+        "subtitle": null,
+        "promotionType": "PERSONAL",
+        "activationStatus": "ACTIVATED",
+        "productCount": 3,
+        "products": [
+          {
+            "id": 238912,
+            "title": "AH Biologisch Buffelmozzarella 52+",
+            "brand": "AH Biologisch",
+            "salesUnitSize": "300 g",
+            "priceV2": {
+              "now": {
+                "amount": 2.23
+              },
+              "was": {
+                "amount": 2.79
+              },
+              "promotionLabel": {
+                "tiers": [
+                  {
+                    "mechanism": "PERCENTAGE",
+                    "description": "20% korting"
+                  }
+                ]
+              }
+            },
+            "imagePack": [
+              {
+                "medium": {
+                  "url": "https://static.ah.nl/dam/product/AHI_513657755662485954674f7771644e59586853786251?revLabel=1&rendition=400x400_WEBP&fileType=binary",
+                  "width": 400
+                }
+              },
+              {
+                "medium": {
+                  "url": "https://static.ah.nl/dam/product/AHI_356f377733694343547865716e393676596543665067?revLabel=1&rendition=400x400_WEBP&fileType=binary",
+                  "width": 400
+                }
+              }
+            ]
+          },
+          {
+            "id": 238911,
+            "title": "AH Biologisch Italiaanse mozzarella",
+            "brand": "AH Biologisch",
+            "salesUnitSize": "317 g",
+            "priceV2": {
+              "now": {
+                "amount": 2.07
+              },
+              "was": {
+                "amount": 2.59
+              },
+              "promotionLabel": {
+                "tiers": [
+                  {
+                    "mechanism": "PERCENTAGE",
+                    "description": "20% korting"
+                  }
+                ]
+              }
+            },
+            "imagePack": [
+              {
+                "medium": {
+                  "url": "https://static.ah.nl/dam/product/AHI_434d50323033323838?revLabel=5&rendition=400x400_WEBP&fileType=binary",
+                  "width": 400
+                }
+              }
+            ]
+          },
+          {
+            "id": 550417,
+            "title": "AH Biologisch Mini buffelmozzarella",
+            "brand": "AH Biologisch",
+            "salesUnitSize": "280 g",
+            "priceV2": {
+              "now": {
+                "amount": 2.71
+              },
+              "was": {
+                "amount": 3.39
+              },
+              "promotionLabel": {
+                "tiers": [
+                  {
+                    "mechanism": "PERCENTAGE",
+                    "description": "20% korting"
+                  }
+                ]
+              }
+            },
+            "imagePack": [
+              {
+                "medium": {
+                  "url": "https://static.ah.nl/dam/product/AHI_69336c3741545639516d75576f4a4b31766858327977?revLabel=1&rendition=400x400_WEBP&fileType=binary",
+                  "width": 400
+                }
+              },
+              {
+                "medium": {
+                  "url": "https://static.ah.nl/dam/product/AHI_4f726a4172345758547661375a487837387071705477?revLabel=1&rendition=400x400_WEBP&fileType=binary",
+                  "width": 400
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

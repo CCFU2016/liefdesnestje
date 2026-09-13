@@ -780,9 +780,77 @@ export const ahConnections = pgTable("ah_connections", {
   needsReconnect: boolean("needs_reconnect").notNull().default(false),
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
   lastError: text("last_error"),
+  // Receipts newer than this have not been imported yet (see receipt-sync.ts).
+  receiptsSyncedAt: timestamp("receipts_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// In-store receipts (kassabonnen), imported from AH so purchase frequency is
+// ours to query: it drives the Bonus Box choices and the "in the bonus this
+// week" ranking, and later the Budget page.
+export const ahReceipts = pgTable(
+  "ah_receipts",
+  {
+    id: text("id").primaryKey(), // AH's receipt id
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    boughtAt: timestamp("bought_at", { withTimezone: true }).notNull(),
+    total: doublePrecision("total"),
+    importedAt: timestamp("imported_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("ah_receipts_household_idx").on(t.householdId, t.boughtAt)]
+);
+
+export const ahReceiptLines = pgTable(
+  "ah_receipt_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    receiptId: text("receipt_id")
+      .notNull()
+      .references(() => ahReceipts.id, { onDelete: "cascade" }),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    posProductId: integer("pos_product_id"), // the till's id
+    webshopId: integer("webshop_id"), // resolved through productConvertId, null when unknown
+    name: text("name").notNull(),
+    quantity: doublePrecision("quantity"),
+    amount: doublePrecision("amount"),
+    inBonus: boolean("in_bonus").notNull().default(false),
+    bonusKind: text("bonus_kind"), // 'bonusDiscount' | 'bonusBox' | null
+  },
+  (t) => [index("ah_receipt_lines_household_product_idx").on(t.householdId, t.webshopId)]
+);
+
+// Till product id → webshop product id, looked up once per id.
+export const ahPosProducts = pgTable("ah_pos_products", {
+  posProductId: integer("pos_product_id").primaryKey(),
+  webshopId: integer("webshop_id"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// What the weekly Bonus Box job did, so Settings can show it.
+export const ahBonusActivations = pgTable(
+  "ah_bonus_activations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    segmentId: text("segment_id").notNull(),
+    title: text("title").notNull(),
+    discount: text("discount"),
+    periodStart: text("period_start").notNull(), // YYYY-MM-DD
+    periodEnd: text("period_end").notNull(),
+    score: integer("score").notNull(), // how often its products were bought
+    status: text("status").notNull(), // 'activated' | 'failed' | 'dry-run'
+    message: text("message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex("ah_bonus_activations_unique").on(t.householdId, t.segmentId, t.periodStart)]
+);
 
 // Which AH product a grocery item resolved to last time, so the review
 // sheet can preselect it and skip the Claude call. Keyed by the normalised

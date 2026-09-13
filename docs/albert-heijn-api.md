@@ -142,6 +142,17 @@ Done with `scripts/ah-login.ts` (tokens in `~/.config/liefdesnestje/ah-tokens.js
   `groceryList(id)` / `groceryListAdd` pair that may grow a delete later.)
 - Receipts: `posReceiptsPage` returns real receipts with `id, dateTime, totalAmount`.
 
+### Bonus Box and bonus pages: verified 2026-09-13
+
+- `GET /mobile-services/bonuspage/v3/metadata?application=AHWEBSHOP` → `periods[]` with `bonusStartDate`, `bonusEndDate` (current week and next), plus the section URLs the app shows.
+- GraphQL `bonusPromotions(input: { periodStart, periodEnd, showAllPromotionSegments: true, forcePromotionVisibility: true })` returns every promotion segment of that week (type `Promotion`: `id title subtitle promotionType activationStatus productCount products { … }`). Personal Bonus Box offers have `promotionType: "PERSONAL"` and `activationStatus: "ACTIVATED" | "NONE"`. The Bio Premium / Terra Premium programme segments also come as PERSONAL with hundreds of products; treat anything over ~30 products as not an offer.
+- Products of one segment: same query with `input.id: "<segmentId>"`; each product has `priceV2 { now { amount } was { amount } promotionLabel { tiers { description } } }` and `imagePack { medium { url } }`.
+- Activation: `mutation { bonusActivatePersonalPromotion(externalId: Int!, startDate: String!) { status message } }`. `externalId` is taken to be the numeric segment id and `startDate` the bonus week's start; confirm by re-reading `activationStatus` rather than trusting `status`. GraphQL `bonusPersonalPromotionBundles { maximumActivations validityPeriod { start end } }` says how many may be active per week (10 here).
+- `GET /mobile-services/bonuspage/v2/section/personal?application=AHWEBSHOP&date=…` lists only the *activated* offers (with `offerId`, `segmentId`, `discountDescription`).
+- `GET /mobile-services/bonuspage/v2/section/previously-bought?application=AHWEBSHOP&date=…` → "bonus for products you bought before": plain products (`webshopId`, prices, `bonusMechanism`, `bonusEndDate`), 38–50 per week for this member. Next week's list is available from Thursday.
+- Receipt lines carry `indicators { name }` with `bonusDiscount` (bonus) or `bonusBox` (personal offer); discounts are separate receipt lines with promo codes, not per product.
+- `query { productConvertId(sourceId: <till product id>) }` maps a receipt line's `id` to the webshop id (`-1` when unknown). Verified on real receipt lines.
+
 ### With a member token (from community projects, not verified here)
 
 | Capability | Call |
